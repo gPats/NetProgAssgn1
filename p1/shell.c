@@ -12,15 +12,15 @@ void put_tokens(char ** tokens);
 int main(){
 	char ** cmd;
 	char str[MAX_CMD_LEN]={};
-	//while (1){
+	while (1){
 		printf("$");
-		scanf("%[^\n]s", str);
+		scanf(" %[^\n]s", str);
 		str[strlen(str)]=0;
 		//printf("%s\n", str);
 		cmd=get_tokens(str);
 		put_tokens(cmd);
 		free(cmd);
-	//}
+	}
 }
 
 char ** get_tokens(char *str){
