@@ -9,7 +9,7 @@
 #define MAX_TOKENS 50
 
 
-char ** get_tokens(char *str);
+char ** get_tokens(char *str,char* delim);
 int check_valid(char ** tokens);
 void put_tokens(char ** tokens);
 
@@ -27,7 +27,7 @@ int main(){
 	}
 }
 
-char ** get_tokens(char *str){
+char ** get_tokens(char *str,char* delim){
 
 	char **ret=(char **) calloc(MAX_TOKENS, sizeof(char*));
 	char * tok;
