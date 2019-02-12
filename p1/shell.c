@@ -8,14 +8,37 @@
 #define MAX_CMD_LEN 1000
 #define MAX_TOKENS 50
 
+//flags
+#define SINGLE_BACK 1
+#define DOUBLE_BACK 2
+#define SINGLE_FRONT 4
+#define DOUBLE_FRONT 8
+#define SINGLE_PIPE 16
+#define DOUBLE_PIPE 32
+#define TRIPLE_PIPE 64
+#define AMPERSAND 128
 
-char ** get_tokens(char *str,char* delim);
+typedef struct node{
+	struct node * next;
+	char ** argv;
+	int argc;
+	int flag;
+}node;
+
+char ** get_tokens(char *str);
 int check_valid(char ** tokens);
 void put_tokens(char ** tokens);
+void free_list(node * first);
+node * get_list(char **tokens);
+void put_list(node *first);
+void mknode(node **here);
 
-int main(){
+
+/*int main(){
 	char ** cmd;
 	char str[MAX_CMD_LEN]={};
+	node * list;
+
 	while (1){
 		printf("$");
 		scanf(" %[^\n]s", str);
@@ -25,19 +48,36 @@ int main(){
 		put_tokens(cmd);
 		free(cmd);
 	}
+}*/
+
+int main(){
+	char ** cmd;
+	char str[MAX_CMD_LEN]={};
+	node * list;
+
+	//while (1){
+		printf("$");
+		scanf(" %[^\n]s", str);
+		str[strlen(str)]=0;
+		//printf("%s\n", str);
+		cmd=get_tokens(str);
+		put_tokens(cmd);
+		list=get_list(cmd);
+		put_list(list);
+		free(cmd);
+	//}
 }
 
-char ** get_tokens(char *str,char* delim){
-
+char ** get_tokens(char *str){
 	char **ret=(char **) calloc(MAX_TOKENS, sizeof(char*));
 	char * tok;
-	tok=strtok(str,delim);
+	tok=strtok(str," ");
 	int i=0;
 	while (tok!=NULL){
 		ret[i]=(char *) calloc(strlen(tok)+1, sizeof(char));
 		if(tok[0]!=0) strcpy(ret[i], tok);
-		ret[i][strlen(tok)] = 'a';
-		tok=strtok(NULL,delim);
+		//ret[i][strlen(tok)] = 'a';
+		tok=strtok(NULL," ");
 		i++;
 	}
 	return ret;
@@ -88,27 +128,66 @@ int exec_command() {
 
 }
 
-int main(){
-	char ** cmd;
-	char ** indi;
-	char str[MAX_CMD_LEN]={};
-	//while (1){
-		printf("$");
-		scanf("%[^\n]s", str);
-		str[strlen(str)]=0;
-		//printf("%s\n", str);
-		cmd=get_tokens(str,"|");
-		indi = get_tokens(cmd[0]," ");
-		put_tokens(cmd);
-		//put_tokens(indi);
-		int ret = check_valid(cmd);
-		int pid;
-		//if(ret > 0) {
-			pid = fork();
-			if(pid == 0)execvp(indi[0],indi);
-			else wait(NULL);
-		//}
-		free(indi);
-		free(cmd);
-	//}
+//reads array of tokens to make a linked list of commands
+node * get_list(char **tokens){
+	node *ret=NULL;
+	int i=0;
+	while (tokens[i]!=NULL){
+		mknode(&ret);
+		while(
+			(strcmp(tokens[i],"<")  !=0) &&
+			(strcmp(tokens[i],"<<") !=0) &&
+			(strcmp(tokens[i],">")  !=0) &&
+			(strcmp(tokens[i],">>") !=0) &&
+			(strcmp(tokens[i],"|")  !=0) &&
+			(strcmp(tokens[i],"||") !=0) &&
+			(strcmp(tokens[i],"|||")!=0) &&
+			(strcmp(tokens[i],"&")  !=0) 
+			){
+
+			ret->argc=ret->argc+1;
+			ret->argv=realloc(ret->argv, (ret->argc)*sizeof(char*));
+			ret->argv[ret->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
+			strcpy(ret->argv[ret->argc-1], tokens[i]);
+			
+			if (tokens[i+1]==NULL) break;
+			i++;
+
+		}
+		if (strcmp(tokens[i],"<") == 0) ret->flag |= SINGLE_BACK;
+		if (strcmp(tokens[i],">") == 0) ret->flag |= SINGLE_FRONT;
+		if (strcmp(tokens[i],"<<") == 0) ret->flag |= DOUBLE_BACK;
+		if (strcmp(tokens[i],">>") == 0) ret->flag |= DOUBLE_FRONT;
+		if (strcmp(tokens[i],"|") == 0) ret->flag |= SINGLE_PIPE;
+		if (strcmp(tokens[i],"||") == 0) ret->flag |= DOUBLE_PIPE;
+		if (strcmp(tokens[i],"|||") == 0) ret->flag |= TRIPLE_PIPE;
+		if (strcmp(tokens[i],"&") == 0) ret->flag |= AMPERSAND;
+		
+		i++;
+	}
+
+	return ret;
+}
+
+//creates a null initiated node
+void mknode(node **here){
+	node *temp = (node *) calloc(1, sizeof(node));
+	temp->next=*here;
+	*here=temp;
+}
+
+
+void put_list(node *first){
+	int i;
+	if (first->next != NULL){
+		put_list(first->next);
+	}
+
+	printf("____Command____\n");
+	printf("argc: %d\n", first->argc);
+	for (i=0; i<first->argc; i++){
+		printf("arg: %s\n", first->argv[i]);
+	}
+	printf("flag: %d\n", first->flag);
+
 }
