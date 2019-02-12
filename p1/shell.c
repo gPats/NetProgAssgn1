@@ -32,7 +32,8 @@ void free_list(node * first);
 node * get_list(char **tokens);
 void put_list(node *first);
 void mknode(node **here);
-
+void firstnode(node **first, node **tail);
+void free_cmd(char **cmd);
 
 /*int main(){
 	char ** cmd;
@@ -64,7 +65,8 @@ int main(){
 		put_tokens(cmd);
 		list=get_list(cmd);
 		put_list(list);
-		free(cmd);
+		free_cmd(cmd);
+		free_list(list);
 	//}
 }
 
@@ -130,10 +132,13 @@ int exec_command() {
 
 //reads array of tokens to make a linked list of commands
 node * get_list(char **tokens){
+	int flag=0;
 	node *ret=NULL;
+	node *tail=NULL;
 	int i=0;
 	while (tokens[i]!=NULL){
-		mknode(&ret);
+		if (i==0) firstnode(&ret, &tail);
+		else mknode(&tail);
 		while(
 			(strcmp(tokens[i],"<")  !=0) &&
 			(strcmp(tokens[i],"<<") !=0) &&
@@ -145,23 +150,25 @@ node * get_list(char **tokens){
 			(strcmp(tokens[i],"&")  !=0) 
 			){
 
-			ret->argc=ret->argc+1;
-			ret->argv=realloc(ret->argv, (ret->argc)*sizeof(char*));
-			ret->argv[ret->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
-			strcpy(ret->argv[ret->argc-1], tokens[i]);
+			if (strcmp(tokens[i], ",") == 0) break;
+
+			tail->argc=tail->argc+1;
+			tail->argv=realloc(tail->argv, (tail->argc)*sizeof(char*));
+			tail->argv[tail->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
+			strcpy(tail->argv[tail->argc-1], tokens[i]);
 			
 			if (tokens[i+1]==NULL) break;
 			i++;
 
 		}
-		if (strcmp(tokens[i],"<") == 0) ret->flag |= SINGLE_BACK;
-		if (strcmp(tokens[i],">") == 0) ret->flag |= SINGLE_FRONT;
-		if (strcmp(tokens[i],"<<") == 0) ret->flag |= DOUBLE_BACK;
-		if (strcmp(tokens[i],">>") == 0) ret->flag |= DOUBLE_FRONT;
-		if (strcmp(tokens[i],"|") == 0) ret->flag |= SINGLE_PIPE;
-		if (strcmp(tokens[i],"||") == 0) ret->flag |= DOUBLE_PIPE;
-		if (strcmp(tokens[i],"|||") == 0) ret->flag |= TRIPLE_PIPE;
-		if (strcmp(tokens[i],"&") == 0) ret->flag |= AMPERSAND;
+		if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
+		if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
+		if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
+		if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
+		if (strcmp(tokens[i],"|") == 0) tail->flag |= SINGLE_PIPE;
+		if (strcmp(tokens[i],"||") == 0) {tail->flag |= DOUBLE_PIPE; flag=2;}
+		if (strcmp(tokens[i],"|||") == 0) {tail->flag |= TRIPLE_PIPE; flag=3;}
+		if (strcmp(tokens[i],"&") == 0) tail->flag |= AMPERSAND;
 		
 		i++;
 	}
@@ -172,22 +179,58 @@ node * get_list(char **tokens){
 //creates a null initiated node
 void mknode(node **here){
 	node *temp = (node *) calloc(1, sizeof(node));
-	temp->next=*here;
-	*here=temp;
+	(*here)->next = temp;
+	*here = temp;
 }
 
-
+//prints list of commands in reverse order
 void put_list(node *first){
 	int i;
-	if (first->next != NULL){
-		put_list(first->next);
+	while(first!=NULL)
+	{
+		printf("____Command____\n");
+		printf("argc: %d\n", first->argc);
+		for (i=0; i<first->argc; i++){
+			printf("arg: %s\n", first->argv[i]);
+		}
+		printf("flag: %d\n", first->flag);
+
+		first=first->next;
+	}
+}
+
+void firstnode(node **first, node **tail){
+	*tail=(node *) calloc(1, sizeof(node));
+	*first=*tail;
+}
+
+void free_list(node *first){
+	int i;
+	node *temp;
+	while(first!=NULL){
+		for (i=0; i<first->argc; i++)
+			free(first->argv[i]);
+		free(first->argv);
+		temp=first->next;
+		free(first);
+		first=temp;
 	}
 
-	printf("____Command____\n");
-	printf("argc: %d\n", first->argc);
-	for (i=0; i<first->argc; i++){
-		printf("arg: %s\n", first->argv[i]);
-	}
-	printf("flag: %d\n", first->flag);
+	/*if (first -> next != NULL) free_list(first->next);
 
+	for (i=0; i<first->argc; i++)
+		free(first->argv[i]);
+
+	free(first->argv);
+	free(first);*/
+}
+
+void free_cmd(char **cmd){
+	int i=0;
+	while (cmd[i]!=NULL){
+		free(cmd[i]);
+		i++;
+	}
+	
+	free(cmd);
 }
