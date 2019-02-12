@@ -76,20 +76,3 @@ int check_valid(char** tokens) {
 	free(buf);
 	return -1;
 }
-
-int main(){
-	char ** cmd;
-	char str[
-	MAX_CMD_LEN]={};
-	//while (1){
-		printf("$");
-		scanf("%[^\n]s", str);
-		str[strlen(str)]=0;
-		//printf("%s\n", str);
-		cmd=get_tokens(str);
-		put_tokens(cmd);
-		int ret = check_valid(cmd);
-		printf("%d\n",ret);
-		free(cmd);
-	//}
-}
