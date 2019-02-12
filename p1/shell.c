@@ -2,11 +2,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 
 #define MAX_CMD_LEN 1000
 #define MAX_TOKENS 50
 
-char ** get_tokens(char *str);
+
+char ** get_tokens(char *str,char* delim);
 int check_valid(char ** tokens);
 void put_tokens(char ** tokens);
 
@@ -24,15 +27,17 @@ int main(){
 	}
 }
 
-char ** get_tokens(char *str){
+char ** get_tokens(char *str,char* delim){
+
 	char **ret=(char **) calloc(MAX_TOKENS, sizeof(char*));
 	char * tok;
-	tok=strtok(str," ");
+	tok=strtok(str,delim);
 	int i=0;
 	while (tok!=NULL){
 		ret[i]=(char *) calloc(strlen(tok)+1, sizeof(char));
 		if(tok[0]!=0) strcpy(ret[i], tok);
-		tok=strtok(NULL," ");
+		ret[i][strlen(tok)] = 'a';
+		tok=strtok(NULL,delim);
 		i++;
 	}
 	return ret;
@@ -75,4 +80,35 @@ int check_valid(char** tokens) {
 	}
 	free(buf);
 	return -1;
+}
+
+//execs and completes requirement of one command
+int exec_command() {
+
+
+}
+
+int main(){
+	char ** cmd;
+	char ** indi;
+	char str[MAX_CMD_LEN]={};
+	//while (1){
+		printf("$");
+		scanf("%[^\n]s", str);
+		str[strlen(str)]=0;
+		//printf("%s\n", str);
+		cmd=get_tokens(str,"|");
+		indi = get_tokens(cmd[0]," ");
+		put_tokens(cmd);
+		//put_tokens(indi);
+		int ret = check_valid(cmd);
+		int pid;
+		//if(ret > 0) {
+			pid = fork();
+			if(pid == 0)execvp(indi[0],indi);
+			else wait(NULL);
+		//}
+		free(indi);
+		free(cmd);
+	//}
 }
