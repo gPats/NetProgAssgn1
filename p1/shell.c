@@ -7,6 +7,7 @@
 
 #define MAX_CMD_LEN 1000
 #define MAX_TOKENS 50
+#define MAX_INDEX 10
 
 //flags
 #define SINGLE_BACK 1
@@ -25,6 +26,10 @@ typedef struct node{
 	int flag;
 }node;
 
+node table[MAX_INDEX]={};
+int scflag=0;
+//int intflag=0;
+
 char ** get_tokens(char *str);
 int check_valid(char ** tokens);
 void put_tokens(char ** tokens);
@@ -34,6 +39,12 @@ void put_list(node *first);
 void mknode(node **here);
 void firstnode(node **first, node **tail);
 void free_cmd(char **cmd);
+void shortcut(node * list);
+void int_handler(int sig);
+void add_entry(int index, node *list);
+int exec_command(node * list);
+int scanline(char *str);
+
 
 /*int main(){
 	char ** cmd;
@@ -44,9 +55,9 @@ void free_cmd(char **cmd);
 		printf("$");
 		scanf(" %[^\n]s", str);
 		str[strlen(str)]=0;
-		//printf("%s\n", str);
 		cmd=get_tokens(str);
-		put_tokens(cmd);
+		list=get_list(cmd);
+		free_list(list);
 		free(cmd);
 	}
 }*/
@@ -56,22 +67,38 @@ int main(){
 	char str[MAX_CMD_LEN]={};
 	node * list;
 
-	//while (1){
+	while (1){
 		printf("$");
-		scanf(" %[^\n]s", str);
-		str[strlen(str)]=0;
-		//printf("%s\n", str);
+		scanline(str);
+		str[strlen(str)-1]=0;
+
+		//if (strlen(str)==0) continue;
+		
 		cmd=get_tokens(str);
-		put_tokens(cmd);
+		
+		if(cmd[0]==NULL) continue;
+
+		if (strcmp(cmd[0], "exit") == 0) break;
+		
+		//put_tokens(cmd);
 		list=get_list(cmd);
-		put_list(list);
+
+		if (strcmp(cmd[0], "sc") == 0)
+			shortcut(list);
+		
+		//put_list(list);
 		free_cmd(cmd);
 		free_list(list);
-	//}
+	}
+
+	printf("EXITING...\n");
 }
 
 char ** get_tokens(char *str){
 	char **ret=(char **) calloc(MAX_TOKENS, sizeof(char*));
+	
+	if(str[0]==0) return ret;
+
 	char * tok;
 	tok=strtok(str," ");
 	int i=0;
@@ -125,7 +152,7 @@ int check_valid(char** tokens) {
 }
 
 //execs and completes requirement of one command
-int exec_command() {
+int exec_command(node *list){
 
 
 }
@@ -233,4 +260,120 @@ void free_cmd(char **cmd){
 	}
 	
 	free(cmd);
+}
+
+void shortcut(node *list){
+	if (list->argc == 1){
+		signal(SIGINT, int_handler);
+		scflag=1;
+		printf("STARTING SC MODE. PRESS CTRL-C TO USE SHORTCUT COMMANDS...\n");
+		return;
+	}
+
+	char *endptr;
+	int index=(int) strtol(list->argv[2], &endptr, 0);
+
+	int tableflag=0;
+
+	if(strcmp(list->argv[1],"-i")==0) tableflag=1;
+	if(strcmp(list->argv[1],"-d")==0) tableflag=2;
+
+	if((list->argc<4)||tableflag==0||(endptr==list->argv[2])){
+		printf("Shortcut usage: sc -i/-d <index> <command>\n");
+		return;
+	}
+
+	if(index<0 || index>MAX_INDEX-1){
+		printf("Index must be between 0 and %d (both included)\n", MAX_INDEX-1);
+		return;
+	}
+
+	int flag=0;
+	int contflag=0;
+	char c;
+
+	if(tableflag==2){
+		int i;
+		for (i=0; i<table[index].argc; i++){
+			free(table[index].argv[i]);
+		}
+		table[index].argc=0;
+	}
+
+	if(table[index].argc!=0){
+		printf("Index already in use by the following command:\n");
+		put_list(&table[index]);
+		printf("Are you sure you want to continue? (y or n)");
+		while(flag==0){
+			c=fgetc(stdin);
+			switch(c){
+				case 'y':
+				case 'Y':
+					contflag=1;
+				case 'n':
+				case 'N':
+					flag=1;
+					break;
+				default :
+					printf("retry:");
+					break;
+			}
+		}
+
+		if(contflag==1)
+			add_entry(index, list);
+
+		return;
+	}
+
+	add_entry(index, list);
+}
+
+void int_handler(int sig){
+	printf(":");
+	int flag=0;
+	int c;
+	while(flag==0){
+		scanf(" %d", &c);
+		if(c>=0 && c<MAX_INDEX){
+			if(table[c].argc!=0)
+				flag=1;
+			else{
+				printf("Table not initialised at Index=%d\n", c);
+				printf("Retry:");
+			}
+		}
+		else{
+			printf("Index must be between 0 and %d (both included)\n", MAX_INDEX-1);
+			printf("Retry:");
+		}
+	}
+	
+	exec_command(&table[c]);
+	printf("Press ENTER to continue.\n");
+}
+
+//Do not call this anywhere else except in shortcut
+void add_entry(int index, node * list){
+	table[index].argc=list->argc-3;
+	table[index].flag=list->flag;
+	table[index].argv=(char**) calloc(list->argc-3, sizeof(char*));
+	int i;
+	for (i=0; i<list->argc-3; i++){
+		table[index].argv[i]=(char*) calloc(strlen(list->argv[i+3])+1, sizeof(char));
+		strcpy(table[index].argv[i], list->argv[i+3]);
+	}
+	table[index].next=NULL;
+}
+
+int scanline(char *str){
+	char c=0;
+	int i=0;
+	while(c!='\n'){
+		c=fgetc(stdin);
+		str[i]=c;
+		i++;
+	}
+	str[i]=0;
+	return i;
 }
