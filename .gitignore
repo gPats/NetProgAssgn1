@@ -1,1 +1,4 @@
 p1/shell
+*.log
+*.aux
+*.pdf

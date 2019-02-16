@@ -24,6 +24,8 @@ typedef struct node{
 	char ** argv;
 	int argc;
 	int flag;
+	char *infile;
+	char *outfile;
 }node;
 
 node table[MAX_INDEX]={};
@@ -86,7 +88,7 @@ int main(){
 		if (strcmp(cmd[0], "sc") == 0)
 			shortcut(list);
 		
-		//put_list(list);
+		put_list(list);
 		free_cmd(cmd);
 		free_list(list);
 	}
@@ -167,10 +169,6 @@ node * get_list(char **tokens){
 		if (i==0) firstnode(&ret, &tail);
 		else mknode(&tail);
 		while(
-			(strcmp(tokens[i],"<")  !=0) &&
-			(strcmp(tokens[i],"<<") !=0) &&
-			(strcmp(tokens[i],">")  !=0) &&
-			(strcmp(tokens[i],">>") !=0) &&
 			(strcmp(tokens[i],"|")  !=0) &&
 			(strcmp(tokens[i],"||") !=0) &&
 			(strcmp(tokens[i],"|||")!=0) &&
@@ -178,6 +176,36 @@ node * get_list(char **tokens){
 			){
 
 			if (strcmp(tokens[i], ",") == 0) break;
+
+			if (strcmp(tokens[i],"<") == 0){
+				tail->flag |= SINGLE_BACK;
+				tail->infile = (char *)calloc(strlen(tokens[i+1])+1, sizeof(char));
+				strcpy(tail->infile, tokens[i+1]);
+				i++;
+				if (tokens[i+1]==NULL) break;
+				i++;
+				continue;
+			}
+
+			if (strcmp(tokens[i],">") == 0){
+				tail->flag |= SINGLE_FRONT;
+				tail->outfile = (char *)calloc(strlen(tokens[i+1])+1, sizeof(char));
+				strcpy(tail->outfile, tokens[i+1]);
+				i++;
+				if (tokens[i+1]==NULL) break;
+				i++;
+				continue;
+			}
+
+			if (strcmp(tokens[i],">>") == 0){
+				tail->flag |= DOUBLE_FRONT;
+				tail->outfile = (char *)calloc(strlen(tokens[i+1])+1, sizeof(char));
+				strcpy(tail->outfile, tokens[i+1]);
+				i++;
+				if (tokens[i+1]==NULL) break;
+				i++;
+				continue;
+			}
 
 			tail->argc=tail->argc+1;
 			tail->argv=realloc(tail->argv, (tail->argc)*sizeof(char*));
@@ -188,10 +216,10 @@ node * get_list(char **tokens){
 			i++;
 
 		}
-		if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
-		if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
+		//if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
+		//if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
 		if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
-		if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
+		//if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
 		if (strcmp(tokens[i],"|") == 0) tail->flag |= SINGLE_PIPE;
 		if (strcmp(tokens[i],"||") == 0) {tail->flag |= DOUBLE_PIPE; flag=2;}
 		if (strcmp(tokens[i],"|||") == 0) {tail->flag |= TRIPLE_PIPE; flag=3;}
@@ -221,6 +249,9 @@ void put_list(node *first){
 			printf("arg: %s\n", first->argv[i]);
 		}
 		printf("flag: %d\n", first->flag);
+
+		printf("infile: %s\n", first->infile);
+		printf("outfile: %s\n", first->outfile);
 
 		first=first->next;
 	}
