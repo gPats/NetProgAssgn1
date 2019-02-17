@@ -9,14 +9,15 @@
 #define MAX_TOKENS 50
 
 //flags
-#define SINGLE_BACK 1
-#define DOUBLE_BACK 2
-#define SINGLE_FRONT 4
-#define DOUBLE_FRONT 8
-#define SINGLE_PIPE 16
-#define DOUBLE_PIPE 32
-#define TRIPLE_PIPE 64
-#define AMPERSAND 128
+#define FLAGS 1
+#define SINGLE_BACK 2
+#define DOUBLE_BACK 4
+#define SINGLE_FRONT 8
+#define DOUBLE_FRONT 16
+#define SINGLE_PIPE 32
+#define DOUBLE_PIPE 64
+#define TRIPLE_PIPE 128
+#define AMPERSAND 256
 
 typedef struct node{
 	struct node * next;
@@ -25,8 +26,10 @@ typedef struct node{
 	int flag;
 }node;
 
+void check_flags(node* nd);
 char ** get_tokens(char *str);
 int check_valid(char ** tokens);
+void exec_command(char** tokens);
 void put_tokens(char ** tokens);
 void free_list(node * first);
 node * get_list(char **tokens);
@@ -34,6 +37,7 @@ void put_list(node *first);
 void mknode(node **here);
 void firstnode(node **first, node **tail);
 void free_cmd(char **cmd);
+void errExit(char* str);
 
 /*int main(){
 	char ** cmd;
@@ -62,12 +66,48 @@ int main(){
 		str[strlen(str)]=0;
 		//printf("%s\n", str);
 		cmd=get_tokens(str);
-		put_tokens(cmd);
+		//put_tokens(cmd);
 		list=get_list(cmd);
-		put_list(list);
+		//put_list(list);
+		exec_command(cmd);
 		free_cmd(cmd);
 		free_list(list);
 	//}
+}
+
+void check_flags(node* nd) {
+	int fd = -1,i;
+	FILE* fp;
+	if (nd->flag & SINGLE_BACK)
+	{
+		for(i = 0;i < nd->argc;i++) {
+			if(strcmp((nd->argv)[i],"<") == 0) {
+				fp = fopen((nd->argv)[i+1],"r");
+				fd = fileno(fp);
+				dup2(fd,STDIN_FILENO);
+				break;
+			}
+		}
+	}
+	if(nd->flag & SINGLE_FRONT) {
+		for(i = 0;i < nd->argc;i++) {
+			if(strcmp((nd->argv)[i],">") == 0) {
+				fp = fopen((nd->argv)[i+1],"w");
+				if(fd == -1) fd = fileno(fp);
+				dup2(fd,STDOUT_FILENO);
+				break;
+			}
+		}
+	}
+	if(nd->flag & DOUBLE_FRONT) {
+		for(i = 0;i < nd->argc;i++) {
+			if(strcmp((nd->argv)[i],">>") == 0) {
+				fp = fopen((nd->argv)[i+1],"a");
+				if(fd == -1) fd = fileno(fp);
+				dup2(fd,STDOUT_FILENO);
+			}
+		}
+	}
 }
 
 char ** get_tokens(char *str){
@@ -125,9 +165,76 @@ int check_valid(char** tokens) {
 }
 
 //execs and completes requirement of one command
-int exec_command() {
-
-
+void exec_command(char** tokens) {
+	int pid,std_out,std_in;
+	node* cmd_list = get_list(tokens);
+	node* iter = cmd_list;
+	node* iter_next = cmd_list->next;
+	int p1[2],p2[2];
+	
+	std_out = dup(STDOUT_FILENO);
+	std_in = dup(STDIN_FILENO);
+	
+	if (iter_next == NULL)
+	{
+		check_flags(iter);
+		if ((pid = fork()) == 0)
+		{
+			check_flags(iter);
+			if(iter->flag & FLAGS)	execlp((iter->argv)[0],(iter->argv)[0],(iter->argv)[1],NULL);
+			else execlp((iter->argv)[0],(iter->argv)[0],NULL);
+		}
+		else wait(NULL);
+	}
+	else
+	{
+		if (pipe(p1) == -1) errExit("pipe 1");
+		if (pipe(p2) == -1) errExit("pipe 2");
+		
+		if(iter->flag & DOUBLE_PIPE) {
+			
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(p1[0]);
+				close(p2[0]);
+				if(iter->flag & FLAGS) execlp((iter->argv)[0],(iter->argv)[0],(iter->argv)[1],NULL);
+				else execlp((iter->argv)[0],(iter->argv)[0],NULL);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next);
+				close(p1[1]);
+				close(p2[0]);
+				close(p2[1]);
+				if(iter->next->flag & FLAGS) execlp((iter->next->argv)[0],(iter->next->argv)[0],(iter->next->argv)[1],NULL);
+				else execlp((iter->next->argv)[0],(iter->next->argv)[0],NULL);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next->next);
+				close(p1[0]);
+				close(p1[1]);
+				close(p2[1]);
+				if(iter->next->next->flag & FLAGS) execlp((iter->next->next->argv)[0],(iter->next->next->argv)[0],(iter->next->next->argv)[1],NULL);
+				else execlp((iter->next->next->argv)[0],(iter->next->next->argv)[0],NULL);
+			}
+			close(p1[0]);
+			close(p1[1]);
+			close(p2[0]);
+			close(p2[1]);
+		}
+		else if (iter->flag & TRIPLE_PIPE)
+		{
+			
+		}
+		else
+		{
+			
+		}
+	}
+	dup2(std_out,STDOUT_FILENO);
+	dup2(std_in,STDIN_FILENO);
 }
 
 //reads array of tokens to make a linked list of commands
@@ -140,14 +247,9 @@ node * get_list(char **tokens){
 		if (i==0) firstnode(&ret, &tail);
 		else mknode(&tail);
 		while(
-			(strcmp(tokens[i],"<")  !=0) &&
-			(strcmp(tokens[i],"<<") !=0) &&
-			(strcmp(tokens[i],">")  !=0) &&
-			(strcmp(tokens[i],">>") !=0) &&
 			(strcmp(tokens[i],"|")  !=0) &&
 			(strcmp(tokens[i],"||") !=0) &&
-			(strcmp(tokens[i],"|||")!=0) &&
-			(strcmp(tokens[i],"&")  !=0) 
+			(strcmp(tokens[i],"|||")!=0)
 			){
 
 			if (strcmp(tokens[i], ",") == 0) break;
@@ -157,18 +259,20 @@ node * get_list(char **tokens){
 			tail->argv[tail->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
 			strcpy(tail->argv[tail->argc-1], tokens[i]);
 			
+			if(strchr(tokens[i],'-') != NULL) tail->flag |= FLAGS;
+			if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
+			if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
+			if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
+			if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
+			if (strcmp(tokens[i],"&") == 0) tail->flag |= AMPERSAND;
+			
 			if (tokens[i+1]==NULL) break;
 			i++;
 
 		}
-		if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
-		if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
-		if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
-		if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
 		if (strcmp(tokens[i],"|") == 0) tail->flag |= SINGLE_PIPE;
 		if (strcmp(tokens[i],"||") == 0) {tail->flag |= DOUBLE_PIPE; flag=2;}
 		if (strcmp(tokens[i],"|||") == 0) {tail->flag |= TRIPLE_PIPE; flag=3;}
-		if (strcmp(tokens[i],"&") == 0) tail->flag |= AMPERSAND;
 		
 		i++;
 	}
@@ -233,4 +337,9 @@ void free_cmd(char **cmd){
 	}
 	
 	free(cmd);
+}
+
+void errExit(char* str) {
+	perror(str);
+	exit(0);
 }
