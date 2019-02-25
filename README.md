@@ -4,6 +4,7 @@ Assignment 1 for Network programming
 -argument store
 -invalid command identification
 
+rm takes only full path. not ~/ form.
 List of functions used:
 1. get_tokens: 
 	returns: 

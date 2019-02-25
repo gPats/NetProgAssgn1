@@ -10,13 +10,15 @@
 #define MAX_INDEX 10
 
 //flags
-#define SINGLE_BACK 1
-#define SINGLE_FRONT 2
-#define DOUBLE_FRONT 4
-#define SINGLE_PIPE 8
-#define DOUBLE_PIPE 16
-#define TRIPLE_PIPE 32
-#define AMPERSAND 64
+#define FLAGS 1
+#define SINGLE_BACK 2
+#define DOUBLE_BACK 4
+#define SINGLE_FRONT 8
+#define DOUBLE_FRONT 16
+#define SINGLE_PIPE 32
+#define DOUBLE_PIPE 64
+#define TRIPLE_PIPE 128
+#define AMPERSAND 256
 
 typedef struct node{
 	struct node * next;
@@ -27,6 +29,7 @@ typedef struct node{
 	char *outfile;
 }node;
 
+void check_flags(node* nd);
 node table[MAX_INDEX]={};
 int scflag=0;
 //int intflag=0;
@@ -34,18 +37,18 @@ int scflag=0;
 int scanline(char *str);
 char ** get_tokens(char *str);
 int check_valid(char ** tokens);
+void exec_stmt(node *cmd_list);
 node * get_list(char **tokens);
 void mknode(node **here);
 void firstnode(node **first, node **tail);
+void errExit(char* str);
 void shortcut(node * list);
 void int_handler(int sig);
 void add_entry(int index, node *list);
-int exec_command(node * list);
 void free_cmd(char **cmd);
 void free_list(node * first);
 void put_list(node *first);
 void put_tokens(char ** tokens);
-
 
 /*int main(){
 	char ** cmd;
@@ -76,23 +79,40 @@ int main(){
 		//if (strlen(str)==0) continue;
 		
 		cmd=get_tokens(str);
-		
 		if(cmd[0]==NULL) continue;
 
-		if (strcmp(cmd[0], "exit") == 0) break;
-		
 		//put_tokens(cmd);
 		list=get_list(cmd);
-
-		if (strcmp(cmd[0], "sc") == 0)
-			shortcut(list);
+		//put_list(list);
+		exec_stmt(list);
 		
-		put_list(list);
+		//put_list(list);
 		free_cmd(cmd);
 		free_list(list);
 	}
 
 	printf("EXITING...\n");
+}
+
+void check_flags(node* nd) {
+	int fd = -1,i;
+	FILE* fp;
+	if (nd->flag & SINGLE_BACK)
+	{
+		fp = fopen(nd->infile,"r");
+		fd = fileno(fp);
+		dup2(fd,STDIN_FILENO);
+	}
+	if(nd->flag & SINGLE_FRONT) {
+		fp = fopen(nd->outfile,"w");
+		fd = fileno(fp);
+		dup2(fd,STDOUT_FILENO);
+	}
+	if(nd->flag & DOUBLE_FRONT) {
+		fp = fopen(nd->outfile,"a");
+		fd = fileno(fp);
+		dup2(fd,STDOUT_FILENO);
+	}
 }
 
 char ** get_tokens(char *str){
@@ -153,9 +173,230 @@ int check_valid(char** tokens) {
 }
 
 //execs and completes requirement of one command
-int exec_command(node *list){
-
-
+void exec_stmt(node *cmd_list) {
+	int pid,std_out,std_in;
+	//node* cmd_list = get_list(tokens);
+	node* iter = cmd_list;
+	node* iter_next = cmd_list->next;
+	node* prev_iter = NULL;
+	int p[2][2];
+	int tpipe[3][2];
+	
+	std_out = dup(STDOUT_FILENO);
+	std_in = dup(STDIN_FILENO);
+	
+	if (iter_next == NULL)
+	{
+		check_flags(iter);
+		if ((pid = fork()) == 0)
+		{
+			check_flags(iter);
+			execvp((iter->argv)[0],iter->argv);
+		}
+		else wait(NULL);
+	}
+	else
+	{
+		
+		if(iter->flag & DOUBLE_PIPE) {
+			
+			if (pipe(p[0]) == -1) errExit("pipe 1");
+			if (pipe(p[1]) == -1) errExit("pipe 2");
+			
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(p[0][0]);
+				close(p[1][0]);
+				close(p[1][1]);
+				dup2(p[0][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(p[0][0]);
+				close(p[1][0]);
+				close(p[0][1]);
+				dup2(p[1][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next);
+				close(p[0][1]);
+				close(p[1][0]);
+				close(p[1][1]);
+				dup2(p[0][0],STDIN_FILENO);
+				execvp((iter->next->argv)[0],iter->next->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next->next);
+				close(p[0][0]);
+				close(p[0][1]);
+				close(p[1][1]);
+				dup2(p[1][0],STDIN_FILENO);
+				execvp((iter->next->next->argv)[0],iter->next->next->argv);
+			}
+			close(p[0][0]);
+			close(p[0][1]);
+			close(p[1][0]);
+			close(p[1][1]);
+		}
+		else if (iter->flag & TRIPLE_PIPE)
+		{
+			if (pipe(tpipe[0]) == -1) errExit("pipe 1");
+			if (pipe(tpipe[1]) == -1) errExit("pipe 2");
+			if (pipe(tpipe[2]) == -1) errExit("pipe 3");
+			
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(tpipe[0][0]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[0][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[1][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				dup2(tpipe[2][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);				
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[0][0],STDIN_FILENO);
+				execvp((iter->next->argv)[0],iter->next->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next->next);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[1][0],STDIN_FILENO);
+				execvp((iter->next->next->argv)[0],iter->next->next->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next->next->next);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][1]);
+				dup2(tpipe[2][0],STDIN_FILENO);
+				execvp((iter->next->next->next->argv)[0],iter->next->next->next->argv);
+			}
+		close(tpipe[0][0]);
+		close(tpipe[0][1]);
+		close(tpipe[1][0]);
+		close(tpipe[1][1]);
+		close(tpipe[2][0]);
+		close(tpipe[2][1]);
+		}
+		else
+		{
+			int cpipe = 0;
+			if (pipe(p[0]) == -1) errExit("pipe 1");
+			if (pipe(p[1]) == -1) errExit("pipe 2");
+			
+			if (iter && (pid = fork()) == 0)
+			{
+				close(p[0][0]);
+				close(p[1][1]);
+				if(!prev_iter)close(p[1][0]);
+				else if(prev_iter->flag & SINGLE_PIPE)dup2(p[1][0],STDIN_FILENO);
+				
+				if(iter->flag & SINGLE_PIPE)dup2(p[0][1],STDOUT_FILENO);
+				else close(p[0][1]);
+				
+				execvp((iter->argv)[0],iter->argv);
+			}
+				
+			if(iter->next && (pid = fork()) == 0)
+			{
+				close(p[0][1]);
+				close(p[1][0]);
+				
+				dup2(p[0][0],STDIN_FILENO);
+				
+				if(iter->next->flag & SINGLE_PIPE)dup2(p[1][1],STDOUT_FILENO);
+				else close(p[1][1]);
+				
+				execvp((iter->next->argv)[0],iter->next->argv);
+			}
+			
+			prev_iter = iter->next;
+			iter = iter->next->next;
+			
+			close(p[cpipe][0]);
+			close(p[cpipe][1]);
+			
+			cpipe = (cpipe == 0)?1:0;
+			wait(NULL);
+			
+			while (iter)
+			{	
+				if(pipe(p[1-cpipe]) == -1)errExit("pipe");
+				
+				if ((pid = fork()) == 0)
+				{
+					if(close(p[cpipe][1]) == -1)errExit("close");
+					if(close(p[1-cpipe][0]) == -1)errExit("close");
+					
+					dup2(p[cpipe][0],STDIN_FILENO);
+					
+					if (iter->next && iter->flag & SINGLE_PIPE)
+					{
+						dup2(p[1-cpipe][1],STDOUT_FILENO);
+					}
+					else {
+						if(close(p[1-cpipe][1]) == -1) 
+							errExit("close"); 
+						check_flags(iter);
+					}
+					if(execvp((iter->argv)[0],iter->argv) == -1)errExit("execv");
+				}
+				close(p[cpipe][0]);
+				close(p[cpipe][1]);
+				cpipe = (cpipe == 0)?1:0;
+				iter = iter->next;
+				wait(NULL);
+			}
+		}
+	}
+	
+	dup2(std_out,STDOUT_FILENO);
+	dup2(std_in,STDIN_FILENO);
 }
 
 //reads array of tokens to make a linked list of commands
@@ -170,8 +411,7 @@ node * get_list(char **tokens){
 		while(
 			(strcmp(tokens[i],"|")  !=0) &&
 			(strcmp(tokens[i],"||") !=0) &&
-			(strcmp(tokens[i],"|||")!=0) &&
-			(strcmp(tokens[i],"&")  !=0) 
+			(strcmp(tokens[i],"|||")!=0)
 			){
 
 			if (strcmp(tokens[i], ",") == 0) break;
@@ -207,14 +447,26 @@ node * get_list(char **tokens){
 			}
 
 			tail->argc=tail->argc+1;
-			tail->argv=realloc(tail->argv, (tail->argc)*sizeof(char*));
+			tail->argv=realloc(tail->argv, (tail->argc+1)*sizeof(char*));
 			tail->argv[tail->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
 			strcpy(tail->argv[tail->argc-1], tokens[i]);
+			
+			if(strchr(tokens[i],'-') != NULL) tail->flag |= FLAGS;
+			if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
+			if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
+			if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
+			if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
+			if (strcmp(tokens[i],"&") == 0) tail->flag |= AMPERSAND;
 			
 			if (tokens[i+1]==NULL) break;
 			i++;
 
 		}
+
+		tail->argv[tail->argc]=0;
+
+		//tail->argv=realloc(tail->argv, (tail->argc+1)*sizeof(char*));
+		//tail->argv[tail->argc]=calloc(1,sizeof(char));
 		//if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
 		//if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
 		if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
@@ -222,7 +474,6 @@ node * get_list(char **tokens){
 		if (strcmp(tokens[i],"|") == 0) tail->flag |= SINGLE_PIPE;
 		if (strcmp(tokens[i],"||") == 0) {tail->flag |= DOUBLE_PIPE; flag=2;}
 		if (strcmp(tokens[i],"|||") == 0) {tail->flag |= TRIPLE_PIPE; flag=3;}
-		if (strcmp(tokens[i],"&") == 0) tail->flag |= AMPERSAND;
 		
 		i++;
 	}
@@ -263,23 +514,15 @@ void firstnode(node **first, node **tail){
 
 void free_list(node *first){
 	int i;
-	node *temp;
-	while(first!=NULL){
-		for (i=0; i<first->argc; i++)
+	node *temp=first;
+	while (first!=NULL){
+		for(i=0; i<first->argc; i++)
 			free(first->argv[i]);
 		free(first->argv);
-		temp=first->next;
-		free(first);
-		first=temp;
+		temp=first;
+		first=first->next;
+		free(temp);
 	}
-
-	/*if (first -> next != NULL) free_list(first->next);
-
-	for (i=0; i<first->argc; i++)
-		free(first->argv[i]);
-
-	free(first->argv);
-	free(first);*/
 }
 
 void free_cmd(char **cmd){
@@ -290,6 +533,12 @@ void free_cmd(char **cmd){
 	}
 	
 	free(cmd);
+}
+
+
+void errExit(char* str) {
+	perror(str);
+	exit(0);
 }
 
 void shortcut(node *list){
@@ -379,7 +628,7 @@ void int_handler(int sig){
 		}
 	}
 	
-	exec_command(&table[c]);
+	exec_stmt(&table[c]);
 	printf("Press ENTER to continue.\n");
 }
 
@@ -387,10 +636,10 @@ void int_handler(int sig){
 void add_entry(int index, node * list){
 	table[index].argc=list->argc-3;
 	table[index].flag=list->flag;
-	table[index].argv=(char**) realloc(list->argc-3, sizeof(char*));
+	table[index].argv=(char**) realloc(table[index].argv, (list->argc-3)*sizeof(char*));
 	int i;
 	for (i=0; i<list->argc-3; i++){
-		table[index].argv[i]=(char*) realloc(strlen(list->argv[i+3])+1, sizeof(char));
+		table[index].argv[i]=(char*) realloc(table[index].argv[i], (strlen(list->argv[i+3])+1)*sizeof(char));
 		strcpy(table[index].argv[i], list->argv[i+3]);
 	}
 	table[index].next=NULL;
@@ -407,3 +656,4 @@ int scanline(char *str){
 	str[i]=0;
 	return i;
 }
+
