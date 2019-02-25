@@ -179,6 +179,7 @@ void exec_stmt(char** tokens) {
 	node* iter_next = cmd_list->next;
 	node* prev_iter = NULL;
 	int p[2][2];
+	int tpipe[3][2];
 	
 	std_out = dup(STDOUT_FILENO);
 	std_in = dup(STDIN_FILENO);
@@ -237,14 +238,89 @@ void exec_stmt(char** tokens) {
 				dup2(p[1][0],STDIN_FILENO);
 				execvp((iter->next->next->argv)[0],iter->next->next->argv);
 			}
-		close(p[0][0]);
-		close(p[0][1]);
-		close(p[1][0]);
-		close(p[1][1]);
+			close(p[0][0]);
+			close(p[0][1]);
+			close(p[1][0]);
+			close(p[1][1]);
 		}
 		else if (iter->flag & TRIPLE_PIPE)
 		{
+			if (pipe(tpipe[0]) == -1) errExit("pipe 1");
+			if (pipe(tpipe[1]) == -1) errExit("pipe 2");
+			if (pipe(tpipe[2]) == -1) errExit("pipe 3");
 			
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(tpipe[0][0]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[0][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[1][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				dup2(tpipe[2][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);				
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[0][0],STDIN_FILENO);
+				execvp((iter->next->argv)[0],iter->next->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next->next);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][1]);
+				close(tpipe[2][0]);
+				close(tpipe[2][1]);
+				dup2(tpipe[1][0],STDIN_FILENO);
+				execvp((iter->next->next->argv)[0],iter->next->next->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter->next->next->next);
+				close(tpipe[0][0]);
+				close(tpipe[0][1]);
+				close(tpipe[1][0]);
+				close(tpipe[1][1]);
+				close(tpipe[2][1]);
+				dup2(tpipe[2][0],STDIN_FILENO);
+				execvp((iter->next->next->next->argv)[0],iter->next->next->next->argv);
+			}
+		close(tpipe[0][0]);
+		close(tpipe[0][1]);
+		close(tpipe[1][0]);
+		close(tpipe[1][1]);
+		close(tpipe[2][0]);
+		close(tpipe[2][1]);
 		}
 		else
 		{
