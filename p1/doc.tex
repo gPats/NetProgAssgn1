@@ -1,17 +1,315 @@
 \documentclass{article}
 \usepackage[margin=1in]{geometry}
+
+\usepackage{xcolor}
+\definecolor{light-gray}{gray}{0.7}
+
 \usepackage{listings}
+\lstdefinelanguage{my-shell}{
+	morekeywords={$},
+	sensitive=false,
+	morecomment=[l]{//},
+	morecomment=[s]{/*}{*/},
+	morestring=[b]",
+}
+\lstset{basicstyle={\small\ttfamily}}
+%\lstset{language=my-shell, keywordstyle=\color{blue}}
+\lstset{frame=none, rulecolor=\color{light-gray}, xleftmargin=1cm}
+\lstset{breaklines=true, tabsize=4}
 
 \begin{document}
 
 %Title stuff
+\pagenumbering{gobble}
+\vspace*{3cm}
 \begin{center}
-\rule{400pt}{1pt}\\
+\rule{300pt}{1pt}\\
 [3mm]
-\textsc{\LARGE Custom Bash-like Shell}\\
-\rule{400pt}{1pt}
+\textsc{\huge Custom Bash-like Shell}\\
+\rule{300pt}{1pt}\\
+\vspace{5cm}
+Submitted in Partial fulfilment of the course IS F462 : Network Programming\\
+\vspace{1cm}
+\today
 \end{center}
 
-\author{Parth Kalgaonkar}
+\vspace{5cm}
+\begin{flushright}
+\large{\bfseries Parth Kalgaonkar}\\
+2016A3PS0268P\\
+\large{\bfseries Gautam Pathak}\\
+2016A7PS0134P
+\end{flushright}
 
+\newpage
+\pagenumbering{arabic}
+\section{Overview}
+This is a brief design document for first problem of Assignment 1. The document serves as a simple documentation for the software. The program reads commands from the user. These commands are then parsed and executed as required depending on any operators such as \lstinline{|, ||, |||, <, >, >> and &}. The parsed output is in the form of a linked list where each node is a separate command and flags in the node represent the presence (if any) of the command operators mentioned above. 
+
+This linked list is then passed to the core section of the program where each node is created as a seperate process using \lstinline{fork()} and executed one by one using \lstinline{execv()} after setting up the required pipes in each of the processes. The process group is also set to foreground or background as required by the user.
+
+\section{Operating conditions / Assumptions made}
+\begin{enumerate}
+\item
+Due to the limitations of the text parser, user commands must strictly adhere to the following format:
+
+\begin{lstlisting}
+cmd1 [flags if any] [arguments] | cmd2 [flags if any] [arguments] | ...
+\end{lstlisting}
+
+The parser strictly uses spaces to seperate words. Thus, every word in the user command (including any operators) must be seperated by atleast one spacebar.
+
+\item
+Shell supports any number of commands (each with it's own arguments) in the pipeline like \lstinline{ls|wc|wc} as required in the question. However, nested pipelines with double or triple pipe operators is not allowed.
+\end{enumerate}
+
+
+
+
+\section{Data structures, Global variables and macros used}
+\lstset{language=C, morekeywords={node}, keywordstyle=\color{blue}, commentstyle=\color{gray}, stringstyle=\color{green}, numbers=left, numberstyle=\small\ttfamily}
+
+\subsection{Linked list of nodes}
+\lstinputlisting[linerange=21-28]{shell.c}
+This is the definition of the nodes that are passed to \lstinline{exec_command()}. So that they can be executed. The progam reads user input and creates a linked list of such nodes. This linked list is then passed to \lstinline{exec_command()} such that a new process may be created with appropriate file descriptors and the command can be properly executed.
+
+The members of this structure are explained below:
+\begin{enumerate}
+	\item \lstinline{node * next} :Pointer to next node in list. NULL for last node.
+	\item \lstinline{char ** argv} :Vector of command arguments including command name and flags. Only first 'argc' members are defined.
+	\item \lstinline{int argc} :Number of arguments.
+	\item \lstinline{int flag} :A set of flags to indicate presence of operators. A value of zero indicates no operators.
+	\item \lstinline{char * infile} :A $\backslash$0 ended string indicating the input file location when \lstinline{<} operator is present. NULL when operator is absent.
+	\item \lstinline{char * outfile} :A $\backslash$0 ended string indicating the output file location when \lstinline{>} or \lstinline{>>} operator is present. NULL when both operators are absent.
+\end{enumerate}
+
+
+\subsection{Macros to define flag values}
+\lstinputlisting[linerange=13-19]{shell.c}
+This set of Macros defines a set of values that \lstinline{node.flag} can take. Each bit in \lstinline{node.flag} indicates the presence of one operator as follows:
+\begin{lstlisting}
+SINGLE_BACK 	:'<'
+SINGLE_FRONT	:'>'
+DOUBLE_FRONT	:'>>'
+SINGLE_PIPE 	:'|'
+DOUBLE_PIPE 	:'||'
+TRIPLE_PIPE 	:'|||'
+AMPERSAND 		:'&'
+\end{lstlisting}
+Multiple bits of \lstinline{node.flag} might be one in some special cases where multiple operators are in use at the same time for eg: \lstinline{grep < infile.txt > outfile.txt}.
+
+
+\subsection{Size limiting macros}
+\lstinputlisting[linerange=8-10]{shell.c}
+This set of macros defines the maximum size of some static elements in the program as follows:
+\begin{enumerate}
+	\item \lstinline{MAX_CMD_LENGTH} :Maximum length of the user input string. Actual user string must be at most one less than this to accomodate the last $\backslash$0 character.
+	\item \lstinline{MAX_TOKENS} :Maximum number of space seperated words that are allowed in the user input string. Actual number of tokens must be at most one less than this to accomodate the last NULL token.
+	\item \lstinline{MAX_INDEX} :Maximum number of entries allowed in the table used for shortcut mode. Table indices allowed are \lstinline{0-(MAX_INDEX-1)}.
+\end{enumerate}
+
+
+\subsection{Global variables for Shortcut mode} \label{sec:shortcutgvs}
+\lstinputlisting[linerange=30-31]{shell.c}
+These variables are used to provide shortcut mode functionality.
+\begin{enumerate}
+	\item \lstinline{table:} An array of nodes that would be used as a lookup table when shell is in shortcut mode.
+	\item \lstinline{scflag:} A simple flag to indicate whether or not the system is in shortcut mode. When \lstinline{$sc} command is issued by user, \lstinline{shortcut()} sets this flag to 1. See \ref{sec:shortcut}
+\end{enumerate} 
+
+\lstset{language=C, keywordstyle=\color{black}, commentstyle=\color{black}, stringstyle=\color{black}, numbers=none}
+
+
+
+\section{Functional Description}
+The program uses the following functions:
+\lstset{language=C, , morekeywords={node}, keywordstyle=\color{blue}, commentstyle=\color{gray}, stringstyle=\color{green}, numbers=left, numberstyle=\small\ttfamily}
+\lstinputlisting[linerange=34-47]{shell.c}
+
+This section describes the purpose of each function in the program.
+
+\subsection{\lstinline{int scanline(char * str)}}
+Reads from \lstinline{stdin} character by character till newline character is encountered. Stores the resulting string in space pointed by \lstinline{str}. Attempting to read more number of characters than the size of memory allocated to \lstinline{str} may result in overflows! Stores the last \lstinline{'\n'} in the string at end. Also stores a \lstinline{'\0'}.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[str] Output location for the user string.
+	\end{description}
+	\item[Returns]\hfill\\
+		Number of characters read from user, including the terminating \lstinline{'\n'}. 
+\end{description}
+
+\subsection{\lstinline{char ** get_tokens(char *str)}} \label{sec:gettokens}
+Reads the string recieved from user by \lstinline{scanline()} and separates it into tokens with spaces as delimeters. A string with more than \lstinline{MAX_TOKENS} might result in an overflow which may or may not cause a Segmentation Fault.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[str] String to be tokenised.
+	\end{description}
+	\item[Returns]\hfill\\
+		A vector of strings each representing a token in the user input.
+	\item[Note]\hfill\\
+		The resulting vector is allocated dynamically and must be freed at the end of each command using \lstinline{free_cmd()}. See \ref{sec:freecmd}.
+\end{description}
+
+\subsection{\lstinline{int check_valid(char ** tokens)}}
+TO DO
+
+\subsection{\lstinline{node * get_list(char ** tokens)}} \label{sec:getlist}
+This function further analyses the vector of tokens created by \lstinline{get_tokens()} (see \ref{sec:gettokens}) and checks for presence of any operators in the user command. On the basis of those operators, the linked list of nodes is created. All memory allocation is done dynamically and within the function. This function is the core of the text parsing operation. Based on operators, separate commands are identified and added as new nodes in the list.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[tokens] Vector of user tokens to be analysed.
+	\end{description}
+	\item[Returns]\hfill\\
+		A pointer to the newly created linked list.
+	\item[Note]\hfill\\
+		The memory allocated to the linked list must be freed at the end of every command to avoid memory leaks for extended periods of operation. \lstinline{free_list()} must be used for this purpose. See \ref{sec:freelist}
+\end{description}
+
+\subsection{\lstinline{void mknode(node ** here)}} \label{sec:mknode}
+This function creates a new node initialised to 0 and adds it to the linked list just after the node at \lstinline{*here}.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[here] Address of a pointer to an existing node. Contents of \lstinline{here} are modified to point to the newly created node in the list. As such, this function can directly be used to add nodes to the end of a linked list when the tail pointer is available and is passed to the function in \lstinline{here}.
+	\end{description}
+	\item[Note]\hfill\\
+		This function will attempt to add a node to a linked list just after the node pointed to by \lstinline{*here}. If this node is absent(ie \lstinline{*here} is \lstinline{NULL} or some garbage value), a call to this function will cause a Segmentation fault. The first node must be created using \lstinline{firstnode()}, and subsequent calls to \lstinline{mknode()} may be made using the resulting tail pointer. See \ref{sec:firstnode}.
+\end{description}
+
+\subsection{\lstinline{void firstnode(node ** first, node ** tail)}} \label{sec:firstnode}
+Creates a new node, initialises it to zero and returns two pointers to the newly created node. After a successful call, the contents of \lstinline{first} and \lstinline{tail} are identical but they serve different purposes in the linked list. After a call to this function has been made, \lstinline{tail} may be subsequently used to add more nodes to the linked list using \lstinline{mknode()}. See \ref{sec:mknode}
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[first] Output location for the head pointer of the newly created linked list.
+		\item[tail] Output location for the tail pointer of the newly created linked list.
+	\end{description}
+	\item[Note]\hfill\\
+		This will create a single new node (initialised to zero) and return two pointers to that in \lstinline{first} and \lstinline{tail}. Any existing pointers in \lstinline{first} and \lstinline{tail} will be lost.
+\end{description}
+
+\subsection{\lstinline{void shortcut(node * list)}} \label{sec:shortcut}
+Handles commands related to the shortcut mode as follows:
+\begin{enumerate}
+	\item When \lstinline{$sc} command is recieved from user, sets \lstinline{scflag=1} (see \ref{sec:shortcutgvs}) and also sets \lstinline{int_handler()} (see \ref{sec:inthandler}) as the disposition for \lstinline{SIGINT} signal. Also prints a message to indicate shortcut mode has started.
+	\item When \lstinline{$sc -i <index> <command>} is recieved from user, checks whether there is any existing entry at \lstinline{<index>} in the table. If there isn't, calls \lstinline{add_entry()} (see \ref{sec:addentry}) to add a new entry at the specified index. Otherwise, it asks user for confirmation and then acts accordingly.
+	\item When \lstinline{$sc -d <index>} is recieved, it removes the entry at specified index if any, else prints an appropriate error message and returns.
+	\item When an invalid command is recieved, prints an error message and returns.
+\end{enumerate}
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[list] The command recieved from the user and analysed by \lstinline{get_list()}(see \ref{sec:getlist}). \lstinline{list->argv[3]} onwards is the actual user command to be added to the look-up table. 
+	\end{description}
+\end{description}
+
+\subsection{\lstinline{void int_handler(int sig)}} \label{sec:inthandler}
+This function is invoked every time a SIGINT signal is generated to the shell by the user upon pressing \lstinline{CTRL-C}. The handler prompts user to enter a number with a \lstinline{':'} and then calls \lstinline{exec_command()} with the address of the appropriate look-up table entry.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[sig] Unused.
+	\end{description}
+	\item[Note]\hfill\\
+		Returning from \lstinline{int_handler} causes bug \#1. See \ref{sec:bugs}.
+\end{description}
+
+\subsection{\lstinline{void add_entry(int index, node * list)}} \label{sec:addentry}
+This function adds the command in the node pointed to by \lstinline{list} at \lstinline{table[index]}. 
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[index] The index at which the command is to be added.
+		\item[list] A pointer to the node with the current user command. \lstinline{list->argv[0]} to \lstinline{list->argv[2]} are assumed to be \lstinline{"sc"}, \lstinline{"-i"} and \lstinline{"<index>"} and are thus not added to the lookup table. As a result, \lstinline{list->argc} is expected to be 3 more than the count in the actual command to be added.
+	\end{description}
+	\item[Note]\hfill
+		\begin{enumerate}
+			\item This function does not perform any sanity checks. 
+			\item Any pre-existing node at \lstinline{index} would be overridden. 
+			\item Out-of-bound indices will result in overflow that can cause Segmentation faults.
+		\end{enumerate}
+\end{description}
+
+\subsection{\lstinline{int exec_command(node * list)}} \label{sec:execcommand}
+TO DO
+
+\subsection{\lstinline{void free_cmd(char ** cmd)}} \label{sec:freecmd}
+Frees the memory blocks allocated to the vector of tokens recieved from \lstinline{get_tokens()}. See \ref{sec:gettokens}
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[cmd] Pointer to the token vector to be released. Must be generated using \lstinline{get_tokens()}
+	\end{description}
+\end{description}
+
+\subsection{\lstinline{void free_list(node * first)}} \label{sec:freelist}
+Frees the memory blocks alloted to the linked list of nodes starting from the node at \lstinline{first}. First would typically be generated by \lstinline{get_list()}. See \ref{sec:getlist}
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[first] Pointer to the first node to be removed. Usually the head pointer. 
+	\end{description}
+	\item[Note]\hfill\\
+		The memory blocks containing \lstinline{argv} for each node will also be freed internally.
+\end{description}
+
+\subsection{Functions used for testing purposes}
+These functions are used to test wheter or not parts of the program are working as expected.
+
+\subsubsection{\lstinline{void put_list(node * first)}}
+Prints the contents of the linked list in the following format. Used to check whether \lstinline{get_list()} is working.See \ref{sec:getlist}.
+\begin{lstlisting}
+____Command____
+argc:<argument count>
+argv:<argument 1>
+argv:<argument 1>
+......
+List of arguments...
+......
+flag:<value of command flag
+infile:<infile if any>
+outfile:<outfile if any>
+\end{lstlisting}
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[first] Pointer to the first node of the linked list to be printed.
+	\end{description}
+\end{description}
+
+\subsubsection{\lstinline{void put_tokens(char ** tokens)}}
+Prints all the tokens pointed to by \lstinline{tokens} till a \lstinline{NULL} is reached. Used to test \lstinline{get_tokens()}. See \ref{sec:gettokens}
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[first] Pointer to the first node of the linked list to be printed.
+	\end{description}
+\end{description}
+
+
+
+
+\lstset{language=C, keywordstyle=\color{black}, commentstyle=\color{black}, stringstyle=\color{black}, numbers=none}
+
+\section{Existing unresolved bugs} \label{sec:bugs}
+\begin{enumerate}
+\item 
+When returning from the \lstinline{SIGINT handler} in the shortcut mode, the program returns to the original point where it was expecting user command. A new input here get's read in incorrectly and the program goes into an undefined state. To avoid this, user is expected to press \lstinline{ENTER} so that the program reads in an empty line and can continue operation. 
+
+But here, when user presses \lstinline{ENTER}, the \lstinline{$} prompt is printed twice as shown below:
+
+\begin{lstlisting}
+$sc -i 1 ls -l
+$sc
+STARTING SC MODE. PRESS CTRL-C TO USE SHORTCUT COMMANDS...
+$^C:1
+<list of files>
+Press ENTER to continue.
+
+$$
+\end{lstlisting}
+\end{enumerate}
 \end{document}

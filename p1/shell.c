@@ -11,13 +11,12 @@
 
 //flags
 #define SINGLE_BACK 1
-#define DOUBLE_BACK 2
-#define SINGLE_FRONT 4
-#define DOUBLE_FRONT 8
-#define SINGLE_PIPE 16
-#define DOUBLE_PIPE 32
-#define TRIPLE_PIPE 64
-#define AMPERSAND 128
+#define SINGLE_FRONT 2
+#define DOUBLE_FRONT 4
+#define SINGLE_PIPE 8
+#define DOUBLE_PIPE 16
+#define TRIPLE_PIPE 32
+#define AMPERSAND 64
 
 typedef struct node{
 	struct node * next;
@@ -32,20 +31,20 @@ node table[MAX_INDEX]={};
 int scflag=0;
 //int intflag=0;
 
+int scanline(char *str);
 char ** get_tokens(char *str);
 int check_valid(char ** tokens);
-void put_tokens(char ** tokens);
-void free_list(node * first);
 node * get_list(char **tokens);
-void put_list(node *first);
 void mknode(node **here);
 void firstnode(node **first, node **tail);
-void free_cmd(char **cmd);
 void shortcut(node * list);
 void int_handler(int sig);
 void add_entry(int index, node *list);
 int exec_command(node * list);
-int scanline(char *str);
+void free_cmd(char **cmd);
+void free_list(node * first);
+void put_list(node *first);
+void put_tokens(char ** tokens);
 
 
 /*int main(){
@@ -388,10 +387,10 @@ void int_handler(int sig){
 void add_entry(int index, node * list){
 	table[index].argc=list->argc-3;
 	table[index].flag=list->flag;
-	table[index].argv=(char**) calloc(list->argc-3, sizeof(char*));
+	table[index].argv=(char**) realloc(list->argc-3, sizeof(char*));
 	int i;
 	for (i=0; i<list->argc-3; i++){
-		table[index].argv[i]=(char*) calloc(strlen(list->argv[i+3])+1, sizeof(char));
+		table[index].argv[i]=(char*) realloc(strlen(list->argv[i+3])+1, sizeof(char));
 		strcpy(table[index].argv[i], list->argv[i+3]);
 	}
 	table[index].next=NULL;
