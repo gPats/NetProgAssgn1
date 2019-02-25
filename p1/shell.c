@@ -7,6 +7,7 @@
 
 #define MAX_CMD_LEN 1000
 #define MAX_TOKENS 50
+#define MAX_INDEX 10
 
 //flags
 #define FLAGS 1
@@ -24,12 +25,17 @@ typedef struct node{
 	char ** argv;
 	int argc;
 	int flag;
+	char *infile;
+	char *outfile;
 }node;
 
 void check_flags(node* nd);
+node table[MAX_INDEX]={};
+int scflag=0;
+//int intflag=0;
 char ** get_tokens(char *str);
 int check_valid(char ** tokens);
-void exec_command(char** tokens);
+void exec_stmt(char** tokens);
 void put_tokens(char ** tokens);
 void free_list(node * first);
 node * get_list(char **tokens);
@@ -38,6 +44,11 @@ void mknode(node **here);
 void firstnode(node **first, node **tail);
 void free_cmd(char **cmd);
 void errExit(char* str);
+void shortcut(node * list);
+void int_handler(int sig);
+void add_entry(int index, node *list);
+int exec_command(node * list);
+int scanline(char *str);
 
 /*int main(){
 	char ** cmd;
@@ -48,9 +59,9 @@ void errExit(char* str);
 		printf("$");
 		scanf(" %[^\n]s", str);
 		str[strlen(str)]=0;
-		//printf("%s\n", str);
 		cmd=get_tokens(str);
-		put_tokens(cmd);
+		list=get_list(cmd);
+		free_list(list);
 		free(cmd);
 	}
 }*/
@@ -60,19 +71,26 @@ int main(){
 	char str[MAX_CMD_LEN]={};
 	node * list;
 
-	//while (1){
+	while (1){
 		printf("$");
-		scanf(" %[^\n]s", str);
-		str[strlen(str)]=0;
-		//printf("%s\n", str);
+		scanline(str);
+		str[strlen(str)-1]=0;
+
+		//if (strlen(str)==0) continue;
+		
 		cmd=get_tokens(str);
+
 		//put_tokens(cmd);
 		list=get_list(cmd);
 		//put_list(list);
-		exec_command(cmd);
+		exec_stmt(cmd);
+		
+		//put_list(list);
 		free_cmd(cmd);
 		free_list(list);
-	//}
+	}
+
+	printf("EXITING...\n");
 }
 
 void check_flags(node* nd) {
@@ -80,38 +98,27 @@ void check_flags(node* nd) {
 	FILE* fp;
 	if (nd->flag & SINGLE_BACK)
 	{
-		for(i = 0;i < nd->argc;i++) {
-			if(strcmp((nd->argv)[i],"<") == 0) {
-				fp = fopen((nd->argv)[i+1],"r");
-				fd = fileno(fp);
-				dup2(fd,STDIN_FILENO);
-				break;
-			}
-		}
+		fp = fopen(nd->infile,"r");
+		fd = fileno(fp);
+		dup2(fd,STDIN_FILENO);
 	}
 	if(nd->flag & SINGLE_FRONT) {
-		for(i = 0;i < nd->argc;i++) {
-			if(strcmp((nd->argv)[i],">") == 0) {
-				fp = fopen((nd->argv)[i+1],"w");
-				if(fd == -1) fd = fileno(fp);
-				dup2(fd,STDOUT_FILENO);
-				break;
-			}
-		}
+		fp = fopen(nd->outfile,"w");
+		fd = fileno(fp);
+		dup2(fd,STDOUT_FILENO);
 	}
 	if(nd->flag & DOUBLE_FRONT) {
-		for(i = 0;i < nd->argc;i++) {
-			if(strcmp((nd->argv)[i],">>") == 0) {
-				fp = fopen((nd->argv)[i+1],"a");
-				if(fd == -1) fd = fileno(fp);
-				dup2(fd,STDOUT_FILENO);
-			}
-		}
+		fp = fopen(nd->outfile,"a");
+		fd = fileno(fp);
+		dup2(fd,STDOUT_FILENO);
 	}
 }
 
 char ** get_tokens(char *str){
 	char **ret=(char **) calloc(MAX_TOKENS, sizeof(char*));
+	
+	if(str[0]==0) return ret;
+
 	char * tok;
 	tok=strtok(str," ");
 	int i=0;
@@ -165,12 +172,13 @@ int check_valid(char** tokens) {
 }
 
 //execs and completes requirement of one command
-void exec_command(char** tokens) {
+void exec_stmt(char** tokens) {
 	int pid,std_out,std_in;
 	node* cmd_list = get_list(tokens);
 	node* iter = cmd_list;
 	node* iter_next = cmd_list->next;
-	int p1[2],p2[2];
+	node* prev_iter = NULL;
+	int p[2][2];
 	
 	std_out = dup(STDOUT_FILENO);
 	std_in = dup(STDIN_FILENO);
@@ -181,48 +189,58 @@ void exec_command(char** tokens) {
 		if ((pid = fork()) == 0)
 		{
 			check_flags(iter);
-			if(iter->flag & FLAGS)	execlp((iter->argv)[0],(iter->argv)[0],(iter->argv)[1],NULL);
-			else execlp((iter->argv)[0],(iter->argv)[0],NULL);
+			execvp((iter->argv)[0],iter->argv);
 		}
 		else wait(NULL);
 	}
 	else
 	{
-		if (pipe(p1) == -1) errExit("pipe 1");
-		if (pipe(p2) == -1) errExit("pipe 2");
 		
 		if(iter->flag & DOUBLE_PIPE) {
+			
+			if (pipe(p[0]) == -1) errExit("pipe 1");
+			if (pipe(p[1]) == -1) errExit("pipe 2");
 			
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter);
-				close(p1[0]);
-				close(p2[0]);
-				if(iter->flag & FLAGS) execlp((iter->argv)[0],(iter->argv)[0],(iter->argv)[1],NULL);
-				else execlp((iter->argv)[0],(iter->argv)[0],NULL);
+				close(p[0][0]);
+				close(p[1][0]);
+				close(p[1][1]);
+				dup2(p[0][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
+			}
+			if ((pid = fork()) == 0)
+			{
+				check_flags(iter);
+				close(p[0][0]);
+				close(p[1][0]);
+				close(p[0][1]);
+				dup2(p[1][1],STDOUT_FILENO);
+				execvp((iter->argv)[0],iter->argv);
 			}
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next);
-				close(p1[1]);
-				close(p2[0]);
-				close(p2[1]);
-				if(iter->next->flag & FLAGS) execlp((iter->next->argv)[0],(iter->next->argv)[0],(iter->next->argv)[1],NULL);
-				else execlp((iter->next->argv)[0],(iter->next->argv)[0],NULL);
+				close(p[0][1]);
+				close(p[1][0]);
+				close(p[1][1]);
+				dup2(p[0][0],STDIN_FILENO);
+				execvp((iter->next->argv)[0],iter->next->argv);
 			}
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next->next);
-				close(p1[0]);
-				close(p1[1]);
-				close(p2[1]);
-				if(iter->next->next->flag & FLAGS) execlp((iter->next->next->argv)[0],(iter->next->next->argv)[0],(iter->next->next->argv)[1],NULL);
-				else execlp((iter->next->next->argv)[0],(iter->next->next->argv)[0],NULL);
+				close(p[0][0]);
+				close(p[0][1]);
+				close(p[1][1]);
+				dup2(p[1][0],STDIN_FILENO);
+				execvp((iter->next->next->argv)[0],iter->next->next->argv);
 			}
-			close(p1[0]);
-			close(p1[1]);
-			close(p2[0]);
-			close(p2[1]);
+		close(p[0][0]);
+		close(p[0][1]);
+		close(p[1][0]);
+		close(p[1][1]);
 		}
 		else if (iter->flag & TRIPLE_PIPE)
 		{
@@ -230,9 +248,76 @@ void exec_command(char** tokens) {
 		}
 		else
 		{
+			int cpipe = 0;
+			if (pipe(p[0]) == -1) errExit("pipe 1");
+			if (pipe(p[1]) == -1) errExit("pipe 2");
 			
+			if (iter && (pid = fork()) == 0)
+			{
+				close(p[0][0]);
+				close(p[1][1]);
+				if(!prev_iter)close(p[1][0]);
+				else if(prev_iter->flag & SINGLE_PIPE)dup2(p[1][0],STDIN_FILENO);
+				
+				if(iter->flag & SINGLE_PIPE)dup2(p[0][1],STDOUT_FILENO);
+				else close(p[0][1]);
+				
+				execvp((iter->argv)[0],iter->argv);
+			}
+				
+			if(iter->next && (pid = fork()) == 0)
+			{
+				close(p[0][1]);
+				close(p[1][0]);
+				
+				dup2(p[0][0],STDIN_FILENO);
+				
+				if(iter->next->flag & SINGLE_PIPE)dup2(p[1][1],STDOUT_FILENO);
+				else close(p[1][1]);
+				
+				execvp((iter->next->argv)[0],iter->next->argv);
+			}
+			
+			prev_iter = iter->next;
+			iter = iter->next->next;
+			
+			close(p[cpipe][0]);
+			close(p[cpipe][1]);
+			
+			cpipe = (cpipe == 0)?1:0;
+			wait(NULL);
+			
+			while (iter)
+			{	
+				if(pipe(p[1-cpipe]) == -1)errExit("pipe");
+				
+				if ((pid = fork()) == 0)
+				{
+					if(close(p[cpipe][1]) == -1)errExit("close");
+					if(close(p[1-cpipe][0]) == -1)errExit("close");
+					
+					dup2(p[cpipe][0],STDIN_FILENO);
+					
+					if (iter->next && iter->flag & SINGLE_PIPE)
+					{
+						dup2(p[1-cpipe][1],STDOUT_FILENO);
+					}
+					else {
+						if(close(p[1-cpipe][1]) == -1) 
+							errExit("close"); 
+						check_flags(iter);
+					}
+					if(execvp((iter->argv)[0],iter->argv) == -1)errExit("execv");
+				}
+				close(p[cpipe][0]);
+				close(p[cpipe][1]);
+				cpipe = (cpipe == 0)?1:0;
+				iter = iter->next;
+				wait(NULL);
+			}
 		}
 	}
+	
 	dup2(std_out,STDOUT_FILENO);
 	dup2(std_in,STDIN_FILENO);
 }
@@ -254,6 +339,36 @@ node * get_list(char **tokens){
 
 			if (strcmp(tokens[i], ",") == 0) break;
 
+			if (strcmp(tokens[i],"<") == 0){
+				tail->flag |= SINGLE_BACK;
+				tail->infile = (char *)calloc(strlen(tokens[i+1])+1, sizeof(char));
+				strcpy(tail->infile, tokens[i+1]);
+				i++;
+				if (tokens[i+1]==NULL) break;
+				i++;
+				continue;
+			}
+
+			if (strcmp(tokens[i],">") == 0){
+				tail->flag |= SINGLE_FRONT;
+				tail->outfile = (char *)calloc(strlen(tokens[i+1])+1, sizeof(char));
+				strcpy(tail->outfile, tokens[i+1]);
+				i++;
+				if (tokens[i+1]==NULL) break;
+				i++;
+				continue;
+			}
+
+			if (strcmp(tokens[i],">>") == 0){
+				tail->flag |= DOUBLE_FRONT;
+				tail->outfile = (char *)calloc(strlen(tokens[i+1])+1, sizeof(char));
+				strcpy(tail->outfile, tokens[i+1]);
+				i++;
+				if (tokens[i+1]==NULL) break;
+				i++;
+				continue;
+			}
+
 			tail->argc=tail->argc+1;
 			tail->argv=realloc(tail->argv, (tail->argc)*sizeof(char*));
 			tail->argv[tail->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
@@ -270,6 +385,10 @@ node * get_list(char **tokens){
 			i++;
 
 		}
+		//if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
+		//if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
+		if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
+		//if (strcmp(tokens[i],">>") == 0) tail->flag |= DOUBLE_FRONT;
 		if (strcmp(tokens[i],"|") == 0) tail->flag |= SINGLE_PIPE;
 		if (strcmp(tokens[i],"||") == 0) {tail->flag |= DOUBLE_PIPE; flag=2;}
 		if (strcmp(tokens[i],"|||") == 0) {tail->flag |= TRIPLE_PIPE; flag=3;}
@@ -298,6 +417,9 @@ void put_list(node *first){
 			printf("arg: %s\n", first->argv[i]);
 		}
 		printf("flag: %d\n", first->flag);
+
+		printf("infile: %s\n", first->infile);
+		printf("outfile: %s\n", first->outfile);
 
 		first=first->next;
 	}
@@ -339,7 +461,129 @@ void free_cmd(char **cmd){
 	free(cmd);
 }
 
+
 void errExit(char* str) {
 	perror(str);
 	exit(0);
 }
+
+void shortcut(node *list){
+	if (list->argc == 1){
+		signal(SIGINT, int_handler);
+		scflag=1;
+		printf("STARTING SC MODE. PRESS CTRL-C TO USE SHORTCUT COMMANDS...\n");
+		return;
+	}
+
+	char *endptr;
+	int index=(int) strtol(list->argv[2], &endptr, 0);
+
+	int tableflag=0;
+
+	if(strcmp(list->argv[1],"-i")==0) tableflag=1;
+	if(strcmp(list->argv[1],"-d")==0) tableflag=2;
+
+	if((list->argc<4)||tableflag==0||(endptr==list->argv[2])){
+		printf("Shortcut usage: sc -i/-d <index> <command>\n");
+		return;
+	}
+
+	if(index<0 || index>MAX_INDEX-1){
+		printf("Index must be between 0 and %d (both included)\n", MAX_INDEX-1);
+		return;
+	}
+
+	int flag=0;
+	int contflag=0;
+	char c;
+
+	if(tableflag==2){
+		int i;
+		for (i=0; i<table[index].argc; i++){
+			free(table[index].argv[i]);
+		}
+		table[index].argc=0;
+	}
+
+	if(table[index].argc!=0){
+		printf("Index already in use by the following command:\n");
+		put_list(&table[index]);
+		printf("Are you sure you want to continue? (y or n)");
+		while(flag==0){
+			c=fgetc(stdin);
+			switch(c){
+				case 'y':
+				case 'Y':
+					contflag=1;
+				case 'n':
+				case 'N':
+					flag=1;
+					break;
+				default :
+					printf("retry:");
+					break;
+			}
+		}
+
+		if(contflag==1)
+			add_entry(index, list);
+
+		return;
+	}
+
+	add_entry(index, list);
+}
+
+int exec_command(node* list) {
+
+}
+
+void int_handler(int sig){
+	printf(":");
+	int flag=0;
+	int c;
+	while(flag==0){
+		scanf(" %d", &c);
+		if(c>=0 && c<MAX_INDEX){
+			if(table[c].argc!=0)
+				flag=1;
+			else{
+				printf("Table not initialised at Index=%d\n", c);
+				printf("Retry:");
+			}
+		}
+		else{
+			printf("Index must be between 0 and %d (both included)\n", MAX_INDEX-1);
+			printf("Retry:");
+		}
+	}
+	
+	exec_command(&table[c]);
+	printf("Press ENTER to continue.\n");
+}
+
+//Do not call this anywhere else except in shortcut
+void add_entry(int index, node * list){
+	table[index].argc=list->argc-3;
+	table[index].flag=list->flag;
+	table[index].argv=(char**) calloc(list->argc-3, sizeof(char*));
+	int i;
+	for (i=0; i<list->argc-3; i++){
+		table[index].argv[i]=(char*) calloc(strlen(list->argv[i+3])+1, sizeof(char));
+		strcpy(table[index].argv[i], list->argv[i+3]);
+	}
+	table[index].next=NULL;
+}
+
+int scanline(char *str){
+	char c=0;
+	int i=0;
+	while(c!='\n'){
+		c=fgetc(stdin);
+		str[i]=c;
+		i++;
+	}
+	str[i]=0;
+	return i;
+}
+
