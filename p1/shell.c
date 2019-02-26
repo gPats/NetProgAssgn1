@@ -79,14 +79,22 @@ int main(){
 		//if (strlen(str)==0) continue;
 		
 		cmd=get_tokens(str);
-		if(cmd[0]==NULL) continue;
+		if(cmd[0]==NULL) {
+			free_cmd(cmd);
+			continue;
+		};
 
-		//put_tokens(cmd);
+
+
 		list=get_list(cmd);
-		//put_list(list);
+		if(strcmp(cmd[0], "sc")==0){
+			shortcut(list);
+			free_cmd(cmd);
+			free_list(list);
+			continue;
+		}
 		exec_stmt(list);
 		
-		//put_list(list);
 		free_cmd(cmd);
 		free_list(list);
 	}
@@ -636,12 +644,13 @@ void int_handler(int sig){
 void add_entry(int index, node * list){
 	table[index].argc=list->argc-3;
 	table[index].flag=list->flag;
-	table[index].argv=(char**) realloc(table[index].argv, (list->argc-3)*sizeof(char*));
+	table[index].argv=(char**) calloc((list->argc-2), sizeof(char*));
 	int i;
 	for (i=0; i<list->argc-3; i++){
-		table[index].argv[i]=(char*) realloc(table[index].argv[i], (strlen(list->argv[i+3])+1)*sizeof(char));
+		table[index].argv[i]=(char*) calloc((strlen(list->argv[i+3])+1), sizeof(char));
 		strcpy(table[index].argv[i], list->argv[i+3]);
 	}
+	table[index].argv[i]=0;
 	table[index].next=NULL;
 }
 
