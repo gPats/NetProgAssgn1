@@ -1,4 +1,7 @@
 ./p1/shell
+./p2/client
+./p2/server
+./p2/file
 *.log
 *.aux
 *.pdf
