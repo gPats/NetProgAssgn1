@@ -94,6 +94,7 @@ int main(){
 			continue;
 		}
 		exec_stmt(list);
+		//put_list(list);
 		
 		free_cmd(cmd);
 		free_list(list);
@@ -419,8 +420,8 @@ node * get_list(char **tokens){
 		while(
 			(strcmp(tokens[i],"|")  !=0) &&
 			(strcmp(tokens[i],"||") !=0) &&
-			(strcmp(tokens[i],"|||")!=0)
-			){
+			(strcmp(tokens[i],"|||")!=0) &&
+			(strcmp(tokens[i],"&") !=0)){
 
 			if (strcmp(tokens[i], ",") == 0) break;
 
@@ -459,7 +460,7 @@ node * get_list(char **tokens){
 			tail->argv[tail->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
 			strcpy(tail->argv[tail->argc-1], tokens[i]);
 			
-			if(strchr(tokens[i],'-') != NULL) tail->flag |= FLAGS;
+			if (strchr(tokens[i],'-') != NULL) tail->flag |= FLAGS;
 			if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
 			if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
 			if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;
@@ -482,7 +483,8 @@ node * get_list(char **tokens){
 		if (strcmp(tokens[i],"|") == 0) tail->flag |= SINGLE_PIPE;
 		if (strcmp(tokens[i],"||") == 0) {tail->flag |= DOUBLE_PIPE; flag=2;}
 		if (strcmp(tokens[i],"|||") == 0) {tail->flag |= TRIPLE_PIPE; flag=3;}
-		
+		if (strcmp(tokens[i],"&") == 0) tail->flag |= AMPERSAND;
+
 		i++;
 	}
 

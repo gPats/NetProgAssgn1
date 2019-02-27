@@ -42,6 +42,7 @@ typedef struct usr{
 	int grpcount;
 	int curmsgq;
 	int gselflag;
+	int offmsgcount;
 }usr;
 
 typedef struct grp{
@@ -54,6 +55,9 @@ typedef struct grp{
 grp mgrp[GRP_PER_USR]={};
 node *msgs=NULL;
 usr me={};
+
+node *head=NULL;
+node *tail=NULL;
 
 int main(int argc, const char *argv[]){
 	key_t key1, key2;
@@ -148,10 +152,18 @@ int main(int argc, const char *argv[]){
 			continue;
 		}
 		if(strcmp(str, "send")==0){
+			if(!me.gselflag){
+				printf("Select a group first. Try swgrp.\n");
+				continue;
+			}
 			send();
 			continue;
 		}
 		if(strcmp(str, "read")==0){
+			if(!me.gselflag){
+				printf("Select a group first. Try swgrp.\n");
+				continue;
+			}
 			if(!me.online){
 				printf("Only valid in online mode\n");
 				continue;
@@ -344,6 +356,9 @@ void send(){
 		if(me.online){
 			msgsnd(me.curmsgq, &m, sizeof(m), 0);
 		}
+		else{
+			addmode(&m);
+		}
 	}
 }
 
@@ -365,4 +380,25 @@ void putmsg(mbuf *m){
 	printf("%s", ctime(&(m->mtime)));
 	printf("%s: ", m->uname);
 	printf("%s\n", m->mtext);
+}
+
+void mknode(mbuf *m){
+	node *temp = (node *) calloc(1, sizeof(node));
+	tail->next = temp;
+	tail = temp;
+	strcpy(tail->m.mtext, m->mtext);
+	strcpy(tail->m.uname, m->uname);
+	tail->m.mtime=m->mtime;
+	//printf("----storing----\n");
+	//putmsg(&(tail->m));
+}
+
+void firstnode(mbuf *m){
+	tail=(node *) calloc(1, sizeof(node));
+	head=tail;
+	strcpy(tail->m.mtext, m->mtext);
+	strcpy(tail->m.uname, m->uname);
+	tail->m.mtime=m->mtime;
+	//printf("----storing----\n");
+	//putmsg(&(tail->m));
 }
