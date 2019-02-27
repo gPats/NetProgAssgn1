@@ -2,6 +2,7 @@ p1/shell
 p2/client
 p2/server
 p2/file
+p2/group
 *.log
 *.aux
 *.pdf
