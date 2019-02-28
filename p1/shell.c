@@ -27,6 +27,7 @@ typedef struct node{
 	int flag;
 	char *infile;
 	char *outfile;
+	int ampersand;
 }node;
 
 void check_flags(node* nd);
@@ -185,6 +186,7 @@ int check_valid(char** tokens) {
 void exec_stmt(node *cmd_list) {
 	int pid,std_out,std_in;
 	//node* cmd_list = get_list(tokens);
+	int status;
 	node* iter = cmd_list;
 	node* iter_next = cmd_list->next;
 	node* prev_iter = NULL;
@@ -200,9 +202,16 @@ void exec_stmt(node *cmd_list) {
 		if ((pid = fork()) == 0)
 		{
 			check_flags(iter);
+			setpgid(0,0);
 			execvp((iter->argv)[0],iter->argv);
 		}
-		else wait(NULL);
+		signal(SIGTTOU,SIG_IGN);
+		if(!(iter->flag & AMPERSAND)) {
+			tcsetpgrp(0,pid);
+			wait(&status);
+			tcsetpgrp(0,getpid());
+		}
+		printf("pid: %d\nstatus: %d\n",pid,status);
 	}
 	else
 	{
@@ -215,39 +224,51 @@ void exec_stmt(node *cmd_list) {
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[1][0]);
 				close(p[1][1]);
 				dup2(p[0][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[1][0]);
 				close(p[0][1]);
 				dup2(p[1][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next);
+				setpgid(0,0);
 				close(p[0][1]);
 				close(p[1][0]);
 				close(p[1][1]);
 				dup2(p[0][0],STDIN_FILENO);
 				execvp((iter->next->argv)[0],iter->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next->next);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[0][1]);
 				close(p[1][1]);
 				dup2(p[1][0],STDIN_FILENO);
 				execvp((iter->next->next->argv)[0],iter->next->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			close(p[0][0]);
 			close(p[0][1]);
 			close(p[1][0]);
@@ -262,6 +283,7 @@ void exec_stmt(node *cmd_list) {
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[1][0]);
 				close(tpipe[1][1]);
@@ -270,9 +292,12 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[0][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
@@ -281,9 +306,12 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[1][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
@@ -292,9 +320,12 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[2][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);				
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next);
+				setpgid(0,0);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
 				close(tpipe[1][1]);
@@ -303,9 +334,12 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[0][0],STDIN_FILENO);
 				execvp((iter->next->argv)[0],iter->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next->next);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][1]);
@@ -314,9 +348,12 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[1][0],STDIN_FILENO);
 				execvp((iter->next->next->argv)[0],iter->next->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
 				check_flags(iter->next->next->next);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
@@ -325,6 +362,8 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[2][0],STDIN_FILENO);
 				execvp((iter->next->next->next->argv)[0],iter->next->next->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 		close(tpipe[0][0]);
 		close(tpipe[0][1]);
 		close(tpipe[1][0]);
@@ -340,6 +379,7 @@ void exec_stmt(node *cmd_list) {
 			
 			if (iter && (pid = fork()) == 0)
 			{
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[1][1]);
 				if(!prev_iter)close(p[1][0]);
@@ -350,9 +390,12 @@ void exec_stmt(node *cmd_list) {
 				
 				execvp((iter->argv)[0],iter->argv);
 			}
-				
+				waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
+		
 			if(iter->next && (pid = fork()) == 0)
 			{
+				setpgid(0,0);
 				close(p[0][1]);
 				close(p[1][0]);
 				
@@ -363,6 +406,9 @@ void exec_stmt(node *cmd_list) {
 				
 				execvp((iter->next->argv)[0],iter->next->argv);
 			}
+			
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			
 			prev_iter = iter->next;
 			iter = iter->next->next;
@@ -379,6 +425,7 @@ void exec_stmt(node *cmd_list) {
 				
 				if ((pid = fork()) == 0)
 				{
+					setpgid(0,0);
 					if(close(p[cpipe][1]) == -1)errExit("close");
 					if(close(p[1-cpipe][0]) == -1)errExit("close");
 					
@@ -395,6 +442,9 @@ void exec_stmt(node *cmd_list) {
 					}
 					if(execvp((iter->argv)[0],iter->argv) == -1)errExit("execv");
 				}
+				waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
+		
 				close(p[cpipe][0]);
 				close(p[cpipe][1]);
 				cpipe = (cpipe == 0)?1:0;
@@ -403,7 +453,7 @@ void exec_stmt(node *cmd_list) {
 			}
 		}
 	}
-	
+	wait(&status);
 	dup2(std_out,STDOUT_FILENO);
 	dup2(std_in,STDIN_FILENO);
 }
