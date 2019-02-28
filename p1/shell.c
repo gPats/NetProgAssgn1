@@ -443,7 +443,7 @@ void exec_stmt(node *cmd_list) {
 		
 			if(iter->next && (pid = fork()) == 0)
 			{		
-				if(check_valid(iter->argv[0]) == -1)
+				if(check_valid(iter->next->argv[0]) == -1)
 				{
 					errExit("program not in PATH");
 				}
