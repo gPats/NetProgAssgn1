@@ -27,6 +27,7 @@ typedef struct node{
 	int flag;
 	char *infile;
 	char *outfile;
+	int ampersand;
 }node;
 
 void check_flags(node* nd);
@@ -36,7 +37,7 @@ int scflag=0;
 
 int scanline(char *str);
 char ** get_tokens(char *str);
-int check_valid(char ** tokens);
+int check_valid(char * tokens);
 void exec_stmt(node *cmd_list);
 node * get_list(char **tokens);
 void mknode(node **here);
@@ -150,32 +151,34 @@ void put_tokens(char ** tokens){
 	}
 }
 
-int check_valid(char** tokens) {
-	if (strchr(tokens[0],'/') != NULL){
-		if(access(tokens[0],F_OK) == 0)return 1;
+int check_valid(char* tokens) {
+	if (strchr(tokens,'/') != NULL){
+		if(access(tokens,F_OK) == 0)return 1;
 	}
 
-	char* search_path = getenv("PATH");
+	char* srch_path = getenv("PATH");
 
-	if(!search_path)return -1;
+	if(!srch_path)return -1;
 		
-	char* buf = (char*)malloc(strlen(tokens[0]) + strlen(search_path) + 3);
+	char* buf = (char*)malloc(strlen(tokens) + strlen(srch_path) + 3);
 		
-	while (*search_path){
+	while (*srch_path){
 		char* iter = buf;
-		for (;*search_path && *search_path != ':'; search_path++,iter++)
+		while (*srch_path && *srch_path != ':')
 		{
-			*iter = *search_path;
+			*iter = *srch_path;
+			srch_path++;
+			iter++;
 		}
 		if(iter == buf)*iter++ = '.';
 		if(iter[-1] != '/')*iter++ = '/';
-		strcpy(iter,tokens[0]);
+		strcpy(iter,tokens);
 		if(access(buf,F_OK) == 0) {
 			free(buf);
 			return 1;
 		}
-		if(!*search_path)break;
-		search_path++; 
+		if(!*srch_path)break;
+		srch_path++; 
 	}
 	free(buf);
 	return -1;
@@ -185,6 +188,7 @@ int check_valid(char** tokens) {
 void exec_stmt(node *cmd_list) {
 	int pid,std_out,std_in;
 	//node* cmd_list = get_list(tokens);
+	int status;
 	node* iter = cmd_list;
 	node* iter_next = cmd_list->next;
 	node* prev_iter = NULL;
@@ -196,13 +200,23 @@ void exec_stmt(node *cmd_list) {
 	
 	if (iter_next == NULL)
 	{
-		check_flags(iter);
 		if ((pid = fork()) == 0)
 		{
+			if(check_valid(iter->argv[0]) == -1)
+			{
+				errExit("program not in PATH");
+			}
 			check_flags(iter);
+			setpgid(0,0);
 			execvp((iter->argv)[0],iter->argv);
 		}
-		else wait(NULL);
+		signal(SIGTTOU,SIG_IGN);
+		if(!(iter->flag & AMPERSAND)) {
+			tcsetpgrp(0,pid);
+			wait(&status);
+			tcsetpgrp(0,getpid());
+		}
+		printf("pid: %d\nstatus: %d\n",pid,status);
 	}
 	else
 	{
@@ -212,42 +226,71 @@ void exec_stmt(node *cmd_list) {
 			if (pipe(p[0]) == -1) errExit("pipe 1");
 			if (pipe(p[1]) == -1) errExit("pipe 2");
 			
+			printf("---------\npipe 1: %d %d\npipe 2: %d %d\n---------\n",p[0][0],p[0][1],p[1][0],p[1][1]);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[1][0]);
 				close(p[1][1]);
 				dup2(p[0][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[1][0]);
 				close(p[0][1]);
 				dup2(p[1][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter->next);
+				setpgid(0,0);
 				close(p[0][1]);
 				close(p[1][0]);
 				close(p[1][1]);
 				dup2(p[0][0],STDIN_FILENO);
 				execvp((iter->next->argv)[0],iter->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter->next->next);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[0][1]);
 				close(p[1][1]);
 				dup2(p[1][0],STDIN_FILENO);
 				execvp((iter->next->next->argv)[0],iter->next->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			close(p[0][0]);
 			close(p[0][1]);
 			close(p[1][0]);
@@ -259,9 +302,16 @@ void exec_stmt(node *cmd_list) {
 			if (pipe(tpipe[1]) == -1) errExit("pipe 2");
 			if (pipe(tpipe[2]) == -1) errExit("pipe 3");
 			
+			printf("---------\npipe 1: %d %d\npipe 2: %d %d\npipe 3: %d %d\n---------\n",p[0][0],p[0][1],p[1][0],p[1][1],p[2][0],p[2][1]);
+			
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[1][0]);
 				close(tpipe[1][1]);
@@ -270,9 +320,16 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[0][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
@@ -281,9 +338,16 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[1][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
@@ -292,9 +356,16 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[2][1],STDOUT_FILENO);
 				execvp((iter->argv)[0],iter->argv);				
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter->next);
+				setpgid(0,0);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
 				close(tpipe[1][1]);
@@ -303,9 +374,16 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[0][0],STDIN_FILENO);
 				execvp((iter->next->argv)[0],iter->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter->next->next);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][1]);
@@ -314,9 +392,16 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[1][0],STDIN_FILENO);
 				execvp((iter->next->next->argv)[0],iter->next->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
 				check_flags(iter->next->next->next);
+				setpgid(0,0);
 				close(tpipe[0][0]);
 				close(tpipe[0][1]);
 				close(tpipe[1][0]);
@@ -325,6 +410,8 @@ void exec_stmt(node *cmd_list) {
 				dup2(tpipe[2][0],STDIN_FILENO);
 				execvp((iter->next->next->next->argv)[0],iter->next->next->next->argv);
 			}
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 		close(tpipe[0][0]);
 		close(tpipe[0][1]);
 		close(tpipe[1][0]);
@@ -338,8 +425,16 @@ void exec_stmt(node *cmd_list) {
 			if (pipe(p[0]) == -1) errExit("pipe 1");
 			if (pipe(p[1]) == -1) errExit("pipe 2");
 			
+			printf("---------\npipe 1: %d %d\npipe 2: %d %d\n---------\n",p[0][0],p[0][1],p[1][0],p[1][1]);
+			
 			if (iter && (pid = fork()) == 0)
 			{
+				if(check_valid(iter->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
+				check_flags(iter);
+				setpgid(0,0);
 				close(p[0][0]);
 				close(p[1][1]);
 				if(!prev_iter)close(p[1][0]);
@@ -350,9 +445,23 @@ void exec_stmt(node *cmd_list) {
 				
 				execvp((iter->argv)[0],iter->argv);
 			}
-				
+				waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
+		
 			if(iter->next && (pid = fork()) == 0)
-			{
+			{		
+				if(check_valid(iter->next->argv[0]) == -1)
+				{
+					errExit("program not in PATH");
+				}
+				
+				if(!(iter->next->next))  {
+					if(iter->next->flag & SINGLE_BACK) errExit("no input allowed as input taken from pipe.\n");
+					check_flags(iter);
+				}
+				else if(iter->next->flag & (SINGLE_FRONT | DOUBLE_FRONT | SINGLE_BACK)) errExit("invalid syntax.\n redirection only allowed in first or last command\n");
+				
+				setpgid(0,0);
 				close(p[0][1]);
 				close(p[1][0]);
 				
@@ -363,6 +472,9 @@ void exec_stmt(node *cmd_list) {
 				
 				execvp((iter->next->argv)[0],iter->next->argv);
 			}
+			
+			waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
 			
 			prev_iter = iter->next;
 			iter = iter->next->next;
@@ -377,8 +489,16 @@ void exec_stmt(node *cmd_list) {
 			{	
 				if(pipe(p[1-cpipe]) == -1)errExit("pipe");
 				
+				printf("---------\nnew pipe %d: %d %d\n---------\n",1-cpipe,p[1-cpipe][0],p[1-cpipe][1]);
+				
 				if ((pid = fork()) == 0)
 				{
+					if(!(iter->next))  {
+						if(iter->flag & SINGLE_BACK) errExit("no input allowed as input taken from pipe.\n");
+						check_flags(iter);
+					}
+					else if(iter->flag & (SINGLE_FRONT | DOUBLE_FRONT | SINGLE_BACK)) errExit("invalid syntax.\n redirection only allowed in first or last command\n");
+					setpgid(0,0);
 					if(close(p[cpipe][1]) == -1)errExit("close");
 					if(close(p[1-cpipe][0]) == -1)errExit("close");
 					
@@ -395,6 +515,9 @@ void exec_stmt(node *cmd_list) {
 					}
 					if(execvp((iter->argv)[0],iter->argv) == -1)errExit("execv");
 				}
+				waitpid(-1,&status,WNOHANG);
+		printf("pid: %d\nstatus: %d\n",pid,status);
+		
 				close(p[cpipe][0]);
 				close(p[cpipe][1]);
 				cpipe = (cpipe == 0)?1:0;
@@ -402,8 +525,8 @@ void exec_stmt(node *cmd_list) {
 				wait(NULL);
 			}
 		}
+		wait(&status);
 	}
-	
 	dup2(std_out,STDOUT_FILENO);
 	dup2(std_in,STDIN_FILENO);
 }
