@@ -448,8 +448,11 @@ void exec_stmt(node *cmd_list) {
 					errExit("program not in PATH");
 				}
 				
-				if(!(iter->next)) check_flags(iter);
-				else if(iter->flag & (SINGLE_FRONT | DOUBLE_FRONT | SINGLE_BACK)) errExit("invalid syntax.\n redirection only allowed in first or last command\n");
+				if(!(iter->next->next))  {
+					if(iter->next->flag & SINGLE_BACK) errExit("no input allowed as input taken from pipe.\n");
+					check_flags(iter);
+				}
+				else if(iter->next->flag & (SINGLE_FRONT | DOUBLE_FRONT | SINGLE_BACK)) errExit("invalid syntax.\n redirection only allowed in first or last command\n");
 				
 				setpgid(0,0);
 				close(p[0][1]);
@@ -481,7 +484,10 @@ void exec_stmt(node *cmd_list) {
 				
 				if ((pid = fork()) == 0)
 				{
-					if(!(iter->next)) check_flags(iter);
+					if(!(iter->next))  {
+						if(iter->flag & SINGLE_BACK) errExit("no input allowed as input taken from pipe.\n");
+						check_flags(iter);
+					}
 					else if(iter->flag & (SINGLE_FRONT | DOUBLE_FRONT | SINGLE_BACK)) errExit("invalid syntax.\n redirection only allowed in first or last command\n");
 					setpgid(0,0);
 					if(close(p[cpipe][1]) == -1)errExit("close");
@@ -510,8 +516,8 @@ void exec_stmt(node *cmd_list) {
 				wait(NULL);
 			}
 		}
+		wait(&status);
 	}
-	wait(&status);
 	dup2(std_out,STDOUT_FILENO);
 	dup2(std_in,STDIN_FILENO);
 }
