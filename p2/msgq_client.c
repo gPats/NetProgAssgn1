@@ -25,6 +25,15 @@ void sync();
 void send();
 void recv();
 void putmsg(mbuf *m);
+void addnode(mbuf *m);
+void send_old();
+
+#define RED_BOLD printf("\033[1;31m")
+#define BLUE_BOLD printf("\033[1;34m")
+#define GREEN_BOLD printf("\033[1;32m")
+#define BLUE printf("\033[0;34m")
+#define CYAN printf("\033[0;36m")
+#define RESET printf("\033[0m")
 
 int req, resp, mes;
 sbuf s;
@@ -82,7 +91,7 @@ int main(int argc, const char *argv[]){
 		return -2;
 	}
 
-	printf("Username: ");
+	BLUE; printf("Username: "); RESET;
 	fgets(me.uname, MAX_UNAME, stdin);
 	me.uname[strlen(me.uname)-1]=0;
 	s.mtype=1;
@@ -95,7 +104,7 @@ int main(int argc, const char *argv[]){
 	printf("Enter 'help' for list of commands.\n");
 
 	while(1){
-		printf("$ ");
+		BLUE_BOLD; printf("$ "); RESET;
 		fgets(str, SMALL_TEXT, stdin);
 		str[strlen(str)-1]='\0';
 		if (strcmp(str, "help")==0) {
@@ -108,7 +117,7 @@ int main(int argc, const char *argv[]){
 		}
 		if (strcmp(str, "login")==0){
 			if(me.online){
-				printf("Already online\n");
+				RED_BOLD; printf("Already online\n"); RESET;
 				continue;
 			}
 			login();
@@ -118,14 +127,14 @@ int main(int argc, const char *argv[]){
 		}
 		if(strcmp(str, "logoff")==0){
 			if(!me.online){
-				printf("Only valid when online\n");
+				RED_BOLD; printf("Only valid when online\n"); RESET;
 				continue;
 			}
 			logout();
 		}
 		if(strcmp(str, "mkgrp")==0){
 			if(!me.online){
-				printf("Only valid when online\n");
+				RED_BOLD; printf("Only valid when online\n"); RESET;
 				continue;
 			}
 			mkgrp();
@@ -133,7 +142,7 @@ int main(int argc, const char *argv[]){
 		}
 		if(strcmp(str, "lsgrp")==0){
 			if(!me.online){
-				printf("Only valid in online mode. Try mygrp.\n");
+				RED_BOLD; printf("Only valid in online mode. Try mygrp.\n"); RESET;
 				continue;
 			}
 			lsgrp();
@@ -141,7 +150,7 @@ int main(int argc, const char *argv[]){
 		}
 		if(strcmp(str, "jngrp")==0){
 			if(!me.online){
-				printf("Only valid in online mode.\n");
+				RED_BOLD; printf("Only valid in online mode.\n"); RESET;
 				continue;
 			}
 			jngrp();
@@ -153,7 +162,7 @@ int main(int argc, const char *argv[]){
 		}
 		if(strcmp(str, "send")==0){
 			if(!me.gselflag){
-				printf("Select a group first. Try swgrp.\n");
+				RED_BOLD; printf("Select a group first. Try swgrp.\n"); RESET;
 				continue;
 			}
 			send();
@@ -161,11 +170,11 @@ int main(int argc, const char *argv[]){
 		}
 		if(strcmp(str, "read")==0){
 			if(!me.gselflag){
-				printf("Select a group first. Try swgrp.\n");
+				RED_BOLD; printf("Select a group first. Try swgrp.\n"); RESET;
 				continue;
 			}
 			if(!me.online){
-				printf("Only valid in online mode\n");
+				RED_BOLD; printf("Only valid in online mode\n"); RESET;
 				continue;
 			}
 			recv();
@@ -203,11 +212,11 @@ void login(){
 	msgrcv(resp, &r, sizeof(r), getpid(), 0);
 	printf("%s\n", r.mtext);
 	if(strcmp(r.mtext, "full")==0){
-		printf("ABORTING... TOO MANY USERS\n");
+		RED_BOLD; printf("ABORTING... TOO MANY USERS\n"); RESET;
 		raise(SIGTERM);
 	}
 	char pwd[MAX_PWD];
-	printf("passwd: ");
+	BLUE; printf("passwd: "); RESET;
 	fgets(pwd, MAX_PWD, stdin);
 	s.cmd=PASWD;
 	pwd[strlen(pwd)-1]='\0';
@@ -217,7 +226,7 @@ void login(){
 	printf("%s\n", r.mtext);
 	if(strcmp(r.mtext, "success")==0 || strcmp(r.mtext, "paswd set")==0) {
 		me.online = 1;
-		printf("ONLINE...\n");
+		GREEN_BOLD; printf("ONLINE...\n"); RESET;
 	}
 }
 
@@ -226,7 +235,7 @@ void logout(){
 	s.cmd=LOGOF;
 	msgsnd(req, &s, sizeof(s), 0);
 	me.online=0;
-	printf("OFFLINE...\n");
+	GREEN_BOLD; printf("OFFLINE...\n"); RESET;
 }
 
 void mkgrp(){
@@ -234,21 +243,21 @@ void mkgrp(){
 	s.mtype=1;
 	s.cmd=MKGRP;
 	char gname[MAX_GNAME];
-	printf("Group name: ");
+	BLUE; printf("Group name: "); RESET;
 	fgets(gname, MAX_GNAME, stdin);
 	gname[strlen(gname)-1]=0;
 	strcpy(s.mtext, gname);
 	msgsnd(req, &s, sizeof(s), 0);
 	msgrcv(resp, &r, sizeof(r), getpid(), 0);
 	if(strcmp(r.mtext, "full")==0){
-		printf("Can't create more groups\n");
+		RED_BOLD; printf("Can't create more groups\n"); RESET;
 		return;
 	}
 	else if(strcmp(r.mtext, "exists")==0){
-		printf("Group already exists\n");
+		RED_BOLD; printf("Group already exists\n"); RESET;
 		return;
 	}
-	else printf("Group %s created\n", s.mtext);
+	GREEN_BOLD; printf("Group %s created\n", s.mtext); RESET;
 }
 
 void lsgrp(){
@@ -271,7 +280,7 @@ void jngrp(){
 	rbuf r;
 	s.cmd=JNGRP;
 	char gname[MAX_GNAME];
-	printf("Group name: ");
+	BLUE; printf("Group name: "); RESET;
 	fgets(gname, MAX_GNAME, stdin);
 	gname[strlen(gname)-1]=0;
 	strcpy(s.mtext, gname);
@@ -281,11 +290,11 @@ void jngrp(){
 	strcpy(serverresp, r.mtext);
 	
 	if(strcmp(serverresp, "alreadyin")==0){
-		printf("You are already a member. Try swgrp.\n");
+		RED_BOLD; printf("You are already a member. Try swgrp.\n"); RESET;
 		return;
 	}
 	if(strcmp(serverresp, "noexist")==0){
-		printf("Group does not exist. Create using mkgrp or check group list using lsgrp.\n");
+		RED_BOLD; printf("Group does not exist. Create using mkgrp or check group list using lsgrp.\n"); RESET;
 		return;
 	}
 
@@ -294,24 +303,24 @@ void jngrp(){
 	mgrp[me.grpcount].projid=projid;
 	mgrp[me.grpcount].gkey=ftok(GPATH, mgrp[me.grpcount].projid);
 	mgrp[me.grpcount].gqid=msgget(mgrp[me.grpcount].gkey, 0);
-	printf("Joined group %s\n", mgrp[me.grpcount].gname);
+	GREEN_BOLD; printf("Joined group %s\n", mgrp[me.grpcount].gname); RESET;
 
 	me.grpcount=me.grpcount+1;
 }
 
 void swgrp(){
 	char gname[MAX_GNAME];
-	printf("Group name: ");
+	BLUE; printf("Group name: "); RESET;
 	fgets(gname, MAX_GNAME, stdin);
 	gname[strlen(gname)-1]=0;
 	if(!isgrp(gname)){
-		printf("Either group doesn't exist or you are not a member.\n");
+		RED_BOLD; printf("Either group doesn't exist or you are not a member.\n"); RESET;
 		return;
 	}
 	me.gselflag=1;
 	int i=getgrp(gname);
 	me.curmsgq=mgrp[i].gqid;
-	printf("Switching to group %s\n", mgrp[i].gname);
+	GREEN_BOLD; printf("Switching to group %s\n", mgrp[i].gname); RESET;
 }
 
 int isgrp(char *gname){
@@ -342,12 +351,16 @@ void sync(){
 		mgrp[i].gkey=ftok(GPATH, mgrp[i].projid);
 		mgrp[i].gqid=msgget(mgrp[i].gkey, 0);
 	}
+	send_old();
 }
 
 void send(){
 	mbuf m;
-	printf("Enter lines of text. ^D to end.\n");
-	while(fgets(m.mtext, MAX_TEXT, stdin), !feof(stdin)){
+	ssize_t size=MAX_TEXT;
+	char *c=(char *)malloc(sizeof(char)*MAX_TEXT);
+	GREEN_BOLD; printf("Enter lines of text. ^D to end.\n"); RESET;
+	while(getline(&c, &size, stdin)!=1){
+		strcpy(m.mtext, c);
 		m.mtype=1;
 		strcpy(m.uname, me.uname);
 		m.pid=getpid();
@@ -357,7 +370,7 @@ void send(){
 			msgsnd(me.curmsgq, &m, sizeof(m), 0);
 		}
 		else{
-			addmode(&m);
+			addnode(&m);
 		}
 	}
 }
@@ -377,8 +390,10 @@ void recv(){
 }
 
 void putmsg(mbuf *m){
+	CYAN;
 	printf("%s", ctime(&(m->mtime)));
 	printf("%s: ", m->uname);
+	RESET;
 	printf("%s\n", m->mtext);
 }
 
@@ -389,6 +404,9 @@ void mknode(mbuf *m){
 	strcpy(tail->m.mtext, m->mtext);
 	strcpy(tail->m.uname, m->uname);
 	tail->m.mtime=m->mtime;
+	tail->m.cmd=m->cmd;
+	tail->m.mtype=m->mtype;
+	tail->gqid=me.curmsgq;
 	//printf("----storing----\n");
 	//putmsg(&(tail->m));
 }
@@ -399,6 +417,29 @@ void firstnode(mbuf *m){
 	strcpy(tail->m.mtext, m->mtext);
 	strcpy(tail->m.uname, m->uname);
 	tail->m.mtime=m->mtime;
+	tail->m.cmd=m->cmd;
+	tail->m.mtype=m->mtype;
+	tail->gqid=me.curmsgq;
 	//printf("----storing----\n");
 	//putmsg(&(tail->m));
+}
+
+void addnode(mbuf *m){
+	if(me.offmsgcount==0) firstnode(m);
+	else mknode(m);
+	me.offmsgcount++;
+}
+
+void send_old(){
+	node *cur=head;
+	node *next=NULL;
+	while(cur!=NULL){
+		cur->m.mtime=time(NULL);
+		msgsnd(cur->gqid, &(cur->m), sizeof(mbuf), 0);
+		me.offmsgcount--;
+		next=cur->next;
+		free(cur);
+		cur=next;
+	}
+	head=tail=NULL;
 }

@@ -93,8 +93,8 @@ int main(){
 			free_list(list);
 			continue;
 		}
-		exec_stmt(list);
-		//put_list(list);
+		//exec_stmt(list);
+		put_list(list);
 		
 		free_cmd(cmd);
 		free_list(list);

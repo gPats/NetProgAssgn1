@@ -6,7 +6,7 @@
 
 \usepackage{listings}
 \lstdefinelanguage{my-shell}{
-	morekeywords={$},
+	morekeywords={\$},
 	sensitive=false,
 	morecomment=[l]{//},
 	morecomment=[s]{/*}{*/},
@@ -152,8 +152,18 @@ Reads the string recieved from user by \lstinline{scanline()} and separates it i
 		The resulting vector is allocated dynamically and must be freed at the end of each command using \lstinline{free_cmd()}. See \ref{sec:freecmd}.
 \end{description}
 
-\subsection{\lstinline{int check_valid(char ** tokens)}}
-TO DO
+\subsection{\lstinline{int check_valid(char * tokens)}}
+This function checks whether the input command exists in PATH variable. It may either accept the full path e.g. /bin/ls or it may accept only the command name e.g. ls provided it is present in any of the folders in PATH variable. If not present returns with error.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[tokens] name of command
+	\end{description}
+	\item[Returns]\hfill\\
+		A vector of strings each representing a token in the user input.
+	\item[Note]\hfill\\
+		The resulting vector is allocated dynamically and must be freed at the end of each command using \lstinline{free_cmd()}. See \ref{sec:freecmd}.
+\end{description}
 
 \subsection{\lstinline{node * get_list(char ** tokens)}} \label{sec:getlist}
 This function further analyses the vector of tokens created by \lstinline{get_tokens()} (see \ref{sec:gettokens}) and checks for presence of any operators in the user command. On the basis of those operators, the linked list of nodes is created. All memory allocation is done dynamically and within the function. This function is the core of the text parsing operation. Based on operators, separate commands are identified and added as new nodes in the list.
@@ -233,8 +243,10 @@ This function adds the command in the node pointed to by \lstinline{list} at \ls
 		\end{enumerate}
 \end{description}
 
-\subsection{\lstinline{int exec_command(node * list)}} \label{sec:execcommand}
-TO DO
+\subsection{\lstinline{int exec_stmt(node * cmd_list)}} \label{sec:execcommand}
+Executes every node in the linked list. Handles different cases of single statement, double, triple pipe and pipelined pipes separately. All file descriptors are set up here as required and the respective command is executed using \lstinline{execve}.
+
+
 
 \subsection{\lstinline{void free_cmd(char ** cmd)}} \label{sec:freecmd}
 Frees the memory blocks allocated to the vector of tokens recieved from \lstinline{get_tokens()}. See \ref{sec:gettokens}

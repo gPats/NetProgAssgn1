@@ -15,6 +15,7 @@
 typedef struct usr{
 	char uname[MAX_UNAME];
 	int online;
+	int sentcount;
 }usr;
 
 typedef struct grp{
@@ -44,6 +45,7 @@ void firstnode(mbuf *m);
 void recv(char *uname, int pid);
 int getusr(char *uname);
 void putmsg(mbuf *m);
+void addselfmsg(char *str);
 
 int main(int argc, char *argv[]){
 	if(argc!=3){
@@ -100,9 +102,9 @@ void sigusrhandle(int sig){
 		msgrcv(isc, &b, sizeof(b), getpid(), 0);
 		strcpy(usrlist[usrcount].uname, b.mtext);
 		usrlist[usrcount].online=1;
-		//char smsg[MAX_TEXT];
-		//sprintf(smsg, "User %s joined chat", usrlist[usrcount].uname);
-		//addselfmsg(smsg);
+		char smsg[MAX_TEXT];
+		sprintf(smsg, "User %s joined chat", usrlist[usrcount].uname);
+		addselfmsg(smsg);
 		usrcount++;
 		printf("%s joined group %s\n", b.mtext, me.gname);
 	}
@@ -115,8 +117,8 @@ void mknode(mbuf *m){
 	strcpy(tail->m.mtext, m->mtext);
 	strcpy(tail->m.uname, m->uname);
 	tail->m.mtime=m->mtime;
-	//printf("----storing----\n");
-	//putmsg(&(tail->m));
+	printf("----storing----\n");
+	putmsg(&(tail->m));
 }
 
 void firstnode(mbuf *m){
@@ -125,19 +127,24 @@ void firstnode(mbuf *m){
 	strcpy(tail->m.mtext, m->mtext);
 	strcpy(tail->m.uname, m->uname);
 	tail->m.mtime=m->mtime;
-	//printf("----storing----\n");
-	//putmsg(&(tail->m));
+	printf("----storing----\n");
+	putmsg(&(tail->m));
 }
 
 void recv(char *uname, int pid){
 	int uid=getusr(uname);
+	int i;
 	node *cur=head;
+	for(i=0; i<usrlist[uid].sentcount; i++)
+		cur=cur->next;
 	while(cur!=NULL){
 		(cur->m).mtype=pid;
 		(cur->m).cmd=MESG;
 		msgsnd(me.gqid, &(cur->m), sizeof(cur->m), 0);
+		i++;
 		cur=cur->next;
 	}
+	usrlist[uid].sentcount=i;
 	mbuf m;
 	m.mtype=pid;
 	m.cmd=LAST;
@@ -154,4 +161,14 @@ void putmsg(mbuf *m){
 	printf("%s", ctime(&(m->mtime)));
 	printf("%s: ", m->uname);
 	printf("%s\n", m->mtext);
+}
+
+void addselfmsg(char *str){
+	mbuf m={};
+	strcpy(m.mtext, str);
+	m.cmd=SEND;
+	m.mtype=1;
+	strcpy(m.uname, "");
+	m.mtime=time(NULL);
+	msgsnd(me.gqid, &m, sizeof(m), 0);
 }
