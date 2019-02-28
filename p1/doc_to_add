@@ -1,0 +1,26 @@
+int check_valid(char* tokens)
+
+This function checks whether the input command exists in PATH variable. It may either accept the full path e.g. /bin/ls or it may accept only the command name e.g. ls provided it is present in any of the folders in PATH variable. If not present returns with error.
+
+Parameters
+
+tokens: name of command
+void errExit(char* str)
+
+Prints error with str + perror output and exits.
+
+Parameters
+
+str: input to print along with perror
+
+void exec_stmt(node *cmd_list)
+
+Executes the node array one by one. Handles different cases of single statement, double, triple pipe and pipelined pipe separately.
+
+Parameters
+
+cmd_list: array of tokenized command to be executed
+
+Notes: 
+1. grep command syntax is grep search_word and not grep "search_word".
+2. flags are to be input as -abcd and not -a -b -c -d.

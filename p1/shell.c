@@ -226,6 +226,7 @@ void exec_stmt(node *cmd_list) {
 			if (pipe(p[0]) == -1) errExit("pipe 1");
 			if (pipe(p[1]) == -1) errExit("pipe 2");
 			
+			printf("---------\npipe 1: %d %d\npipe 2: %d %d\n---------\n",p[0][0],p[0][1],p[1][0],p[1][1]);
 			if ((pid = fork()) == 0)
 			{
 				if(check_valid(iter->argv[0]) == -1)
@@ -300,6 +301,8 @@ void exec_stmt(node *cmd_list) {
 			if (pipe(tpipe[0]) == -1) errExit("pipe 1");
 			if (pipe(tpipe[1]) == -1) errExit("pipe 2");
 			if (pipe(tpipe[2]) == -1) errExit("pipe 3");
+			
+			printf("---------\npipe 1: %d %d\npipe 2: %d %d\npipe 3: %d %d\n---------\n",p[0][0],p[0][1],p[1][0],p[1][1],p[2][0],p[2][1]);
 			
 			if ((pid = fork()) == 0)
 			{
@@ -422,6 +425,8 @@ void exec_stmt(node *cmd_list) {
 			if (pipe(p[0]) == -1) errExit("pipe 1");
 			if (pipe(p[1]) == -1) errExit("pipe 2");
 			
+			printf("---------\npipe 1: %d %d\npipe 2: %d %d\n---------\n",p[0][0],p[0][1],p[1][0],p[1][1]);
+			
 			if (iter && (pid = fork()) == 0)
 			{
 				if(check_valid(iter->argv[0]) == -1)
@@ -483,6 +488,8 @@ void exec_stmt(node *cmd_list) {
 			while (iter)
 			{	
 				if(pipe(p[1-cpipe]) == -1)errExit("pipe");
+				
+				printf("---------\nnew pipe %d: %d %d\n---------\n",1-cpipe,p[1-cpipe][0],p[1-cpipe][1]);
 				
 				if ((pid = fork()) == 0)
 				{
