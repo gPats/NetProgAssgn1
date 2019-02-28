@@ -69,7 +69,6 @@ int main(int argc, char *argv[]){
 	sprintf(projidstr, "%d", projid+1);
 
 	b.mtype=1;
-	b.pid=getpid();
 	strcpy(b.mtext, projidstr);
 	msgsnd(isc, &b, sizeof(b), 0);
 
@@ -155,6 +154,7 @@ int getusr(char *uname){
 	int i;
 	for(i=0; i<usrcount; i++)
 		if(strcmp(usrlist[i].uname, uname)==0) return i;
+	return -1;
 }
 
 void putmsg(mbuf *m){

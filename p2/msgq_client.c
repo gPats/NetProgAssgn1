@@ -70,7 +70,6 @@ node *tail=NULL;
 
 int main(int argc, const char *argv[]){
 	key_t key1, key2;
-	rbuf r;
 	char str[SMALL_TEXT];
 
 	if((key1=ftok(SPATH, 0))==-1){
@@ -231,7 +230,6 @@ void login(){
 }
 
 void logout(){
-	rbuf r;
 	s.cmd=LOGOF;
 	msgsnd(req, &s, sizeof(s), 0);
 	me.online=0;
@@ -305,6 +303,7 @@ void jngrp(){
 	mgrp[me.grpcount].gqid=msgget(mgrp[me.grpcount].gkey, 0);
 	GREEN_BOLD; printf("Joined group %s\n", mgrp[me.grpcount].gname); RESET;
 
+	me.grpmem[me.grpcount]=1;
 	me.grpcount=me.grpcount+1;
 }
 
@@ -335,6 +334,7 @@ int getgrp(char *gname){
 	int i;
 	for(i=0; i<me.grpcount; i++)
 		if(strcmp(mgrp[i].gname, gname)==0) return i;
+	return -1;
 }
 
 void sync(){
@@ -356,7 +356,7 @@ void sync(){
 
 void send(){
 	mbuf m;
-	ssize_t size=MAX_TEXT;
+	size_t size=MAX_TEXT;
 	char *c=(char *)malloc(sizeof(char)*MAX_TEXT);
 	GREEN_BOLD; printf("Enter lines of text. ^D to end.\n"); RESET;
 	while(getline(&c, &size, stdin)!=1){
@@ -373,6 +373,7 @@ void send(){
 			addnode(&m);
 		}
 	}
+	free(c);
 }
 
 void recv(){

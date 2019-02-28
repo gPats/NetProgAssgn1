@@ -27,7 +27,6 @@ typedef struct sbuf{
 	long mtype;
 	int cmd;
 	char uname[MAX_UNAME];
-	int gnum;
 	int pid;
 	char mtext[SMALL_TEXT];
 }sbuf;
@@ -48,6 +47,5 @@ typedef struct mbuf{
 
 typedef struct ibuf{
 	long mtype;
-	int pid;
 	char mtext[SMALL_TEXT];
 }ibuf;

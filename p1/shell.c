@@ -5,67 +5,51 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
+#define BLUE_BOLD printf("\033[1;34m")
+#define RESET printf("\033[0m")
+
 #define MAX_CMD_LEN 1000
 #define MAX_TOKENS 50
 #define MAX_INDEX 10
 
 //flags
-#define FLAGS 1
-#define SINGLE_BACK 2
-#define DOUBLE_BACK 4
-#define SINGLE_FRONT 8
-#define DOUBLE_FRONT 16
-#define SINGLE_PIPE 32
-#define DOUBLE_PIPE 64
-#define TRIPLE_PIPE 128
-#define AMPERSAND 256
+#define SINGLE_BACK 1
+#define DOUBLE_BACK 2
+#define SINGLE_FRONT 4
+#define DOUBLE_FRONT 8
+#define SINGLE_PIPE 16
+#define DOUBLE_PIPE 32
+#define TRIPLE_PIPE 64
+#define AMPERSAND 128
 
 typedef struct node{
 	struct node * next;
 	char ** argv;
 	int argc;
 	int flag;
-	char *infile;
-	char *outfile;
-	int ampersand;
+	char * infile;
+	char * outfile;
 }node;
 
-void check_flags(node* nd);
 node table[MAX_INDEX]={};
 int scflag=0;
-//int intflag=0;
 
 int scanline(char *str);
 char ** get_tokens(char *str);
 int check_valid(char * tokens);
-void exec_stmt(node *cmd_list);
 node * get_list(char **tokens);
 void mknode(node **here);
 void firstnode(node **first, node **tail);
-void errExit(char* str);
 void shortcut(node * list);
 void int_handler(int sig);
 void add_entry(int index, node *list);
+void exec_stmt(node *cmd_list);
+void check_flags(node* nd);
+void errExit(char* str);
 void free_cmd(char **cmd);
 void free_list(node * first);
 void put_list(node *first);
 void put_tokens(char ** tokens);
-
-/*int main(){
-	char ** cmd;
-	char str[MAX_CMD_LEN]={};
-	node * list;
-
-	while (1){
-		printf("$");
-		scanf(" %[^\n]s", str);
-		str[strlen(str)]=0;
-		cmd=get_tokens(str);
-		list=get_list(cmd);
-		free_list(list);
-		free(cmd);
-	}
-}*/
 
 int main(){
 	char ** cmd;
@@ -73,11 +57,9 @@ int main(){
 	node * list;
 
 	while (1){
-		printf("$");
+		BLUE_BOLD; printf("$ "); RESET;
 		scanline(str);
 		str[strlen(str)-1]=0;
-
-		//if (strlen(str)==0) continue;
 		
 		cmd=get_tokens(str);
 		if(cmd[0]==NULL) {
@@ -94,8 +76,8 @@ int main(){
 			free_list(list);
 			continue;
 		}
-		//exec_stmt(list);
-		put_list(list);
+		exec_stmt(list);
+		//put_list(list);
 		
 		free_cmd(cmd);
 		free_list(list);
@@ -341,7 +323,7 @@ void exec_stmt(node *cmd_list) {
 			waitpid(-1,&status,WNOHANG);
 		printf("pid: %d\nstatus: %d\n",pid,status);
 			if ((pid = fork()) == 0)
-			{
+			{	
 				if(check_valid(iter->argv[0]) == -1)
 				{
 					errExit("program not in PATH");
@@ -583,7 +565,6 @@ node * get_list(char **tokens){
 			tail->argv[tail->argc-1]=calloc(strlen(tokens[i])+1, sizeof(char));
 			strcpy(tail->argv[tail->argc-1], tokens[i]);
 			
-			if (strchr(tokens[i],'-') != NULL) tail->flag |= FLAGS;
 			if (strcmp(tokens[i],"<") == 0) tail->flag |= SINGLE_BACK;
 			if (strcmp(tokens[i],">") == 0) tail->flag |= SINGLE_FRONT;
 			if (strcmp(tokens[i],"<<") == 0) tail->flag |= DOUBLE_BACK;

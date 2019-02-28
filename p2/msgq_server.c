@@ -32,7 +32,7 @@ int usrcount=0;
 
 int mkgrp(char *gname, int pid);
 void put_req(sbuf *s);
-void respond(const char msg[], int pid);
+void respond(char *msg, int pid);
 int isusr(char *uname);
 void addusr(char *uname);
 int getusr(char *uname);
@@ -70,8 +70,6 @@ int main(){
 
 	keyisc=ftok(GPATH, 0);
 	isc=msgget(keyisc, IPC_CREAT | 0666);
-
-	int fd;
 
 	printf("server ready. press ^C to stop server and delete all groups\n");
 	while(1){
@@ -139,12 +137,12 @@ void put_req(sbuf *s){
 	printf("____Request____\n");
 	printf("type: %ld\n", s->mtype);
 	printf("uname: %s\n", s->uname);
-	printf("gnum: %d\n", s->gnum);
+	//printf("gnum: %d\n", s->gnum);
 	printf("pid: %d\n", s->pid);
 	printf("text: %s\n", s->mtext);
 }
 
-void respond(const char msg[], int pid){
+void respond(char *msg, int pid){
 	rbuf r={};
 	r.mtype=pid;
 	strcpy(r.mtext, msg);
@@ -198,6 +196,7 @@ int getusr(char *uname){
 	int i;
 	for(i=0; i<usrcount; i++)
 		if(strcmp(usrlist[i].uname, uname)==0) return i;
+	return -1;
 }
 
 void logout(char *uname){
@@ -218,6 +217,7 @@ int getgrp(char *gname){
 	int i;
 	for(i=0; i<grpcount; i++)
 		if(strcmp(grplist[i].gname, gname)==0) return i;
+	return -1;
 }
 
 void lsgrp(char *uname, int pid){

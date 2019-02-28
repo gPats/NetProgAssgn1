@@ -1,0 +1,107 @@
+\documentclass{article}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\definecolor{light-gray}{gray}{0.7}
+
+\usepackage{listings}
+\lstdefinelanguage{my-shell}{
+	morekeywords={\$},
+	sensitive=false,
+	morecomment=[l]{//},
+	morecomment=[s]{/*}{*/},
+	morestring=[b]",
+}
+\lstset{basicstyle={\small\ttfamily}}
+%\lstset{language=my-shell, keywordstyle=\color{blue}}
+\lstset{frame=none, rulecolor=\color{light-gray}, xleftmargin=1cm}
+\lstset{language=C, morekeywords={node}, keywordstyle=\color{blue}, commentstyle=\color{gray}, stringstyle=\color{green}, numbers=left, numberstyle=\small\ttfamily}
+\lstset{breaklines=true, tabsize=4}
+
+\begin{document}
+
+%Title stuff
+\pagenumbering{gobble}
+\vspace*{3cm}
+\begin{center}
+\rule{350pt}{1pt}\\
+[3mm]
+\textsc{\huge Group Messaging System using}\\
+\vspace{1mm}
+\textsc{\huge Message Queues}
+\rule{350pt}{1pt}\\
+\vspace{5cm}
+Submitted in Partial fulfilment of the course IS F462 : Network Programming\\
+\vspace{1cm}
+\today
+\end{center}
+
+\vspace{5cm}
+\begin{flushright}
+\large{\bfseries Parth Kalgaonkar}\\
+2016A3PS0268P\\
+\large{\bfseries Gautam Pathak}\\
+2016A7PS0134P
+\end{flushright}
+
+\newpage
+\pagenumbering{arabic}
+
+\section{Overview}
+This is a brief design document for second problem of Assignment 1. The document serves as a simple documentation for the software. The program allows the user to create message groups, join groups, recieve messages from groups, and send messages to groups in online/offline modes. 
+
+The program is implemented with a command line based user interface. There are specific commands that the user must issue to access groups, make and join groups etc. Every user has a unique username and every group can be identified by a unique group name. 
+
+The system is divided into three kinds of processes, \lstinline{client}, \lstinline{server}, and \lstinline{group}. Each user is implemented as a \lstinline{client} process, there is one \lstinline{server} for handling the control of all groups and each message group is implemented as a \lstinline{group} process to simplify handling of group messages. 
+
+\section{Data structures for Messages}
+The program uses seperate data structures for different types of messages that can be sent between processes.
+
+\subsection{Server Requests: \lstinline{sbuf}}\label{sec:servreq}
+\lstinputlisting[linerange=26-32]{msgq.h}
+Client processes send these to the server to create groups, join groups, login, logoff etc.
+\begin{enumerate}
+	\item \lstinline{mtype:} Message type. Always set to 1 to send messages to server.
+	\item \lstinline{cmd:} The command sent to the server that acts as a directive. May take values such as \lstinline{LOGIN}, \lstinline{MKGRP}, \lstinline{JNGRP} etc. These values are macros defined in \lstinline{msgq.h}.
+	\item \lstinline{uname:} Username of the client sending the request. 
+	\item \lstinline{pid:} Process ID of the \lstinline{client} process so the \lstinline{server} may respond.
+	\item \lstinline{mtext:} A small piece of text to indicate any other data such ass group name to join etc.
+\end{enumerate}
+
+\subsection{Server Response: \lstinline{rbuf}}
+\lstinputlisting[linerange=34-37]{msgq.h}
+Server sends this back to the client to indicate, success, failure and other peices of information such as group names etc. Also used to synchronise the client with the server at the time of login.
+\begin{enumerate}
+	\item \lstinline{mtype:} Message type. Must be set to the process ID of the \lstinline{client} process.
+	\item \lstinline{mtext:} Message body. May be small words such as \lstinline{"invalid"}, \lstinline{"success"}, or even numbers converted to strings using \lstinline{sprintf};
+\end{enumerate}
+
+\subsection{Group Messages: \lstinline{mbuf}}
+\lstinputlisting[linerange=39-46]{msgq.h}
+Used by \lstinline{client} and \lstinline{group} processes to send and recieve messages. Client processes also send this same packet once to indicate to the \lstinline{group} that they want to recieve new messages from the group.
+\begin{enumerate}
+	\item \lstinline{mtype:} Message type. Must be set to \lstinline{1} to send packets to \lstinline{group} and set to PID of child to send messages to the \lstinline{child}.
+	\item \lstinline{cmd:} Command when sent to \lstinline{group}. Must be equal to \lstinline{SEND} to send messages to the group and equal to \lstinline{RECV} to indicate that \lstinline{client} is ready to recieve messages from the group. 
+	\item \lstinline{mtext:} Message body. Unused when \lstinline{cmd} is set to \lstinline{RECV}.
+	\item \lstinline{uname:} Username of the user that sent the message.
+	\item \lstinline{pid:} Process ID of the \lstinline{client} process that sent the message. Used in combination with \lstinline{cmd=RECV} so the \lstinline{group} knows which process to send messages to.
+	\item \lstinline{mtime:} Message time.
+\end{enumerate} 
+
+\section{System Architecture}
+Each user is a separate \lstinline{client} process. The \lstinline{server} is a seperate process in the system that handles all initial requests such as group creation, joining, client login, etc. 
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.4\textwidth]{./arch1.png}
+	\caption{System architecture when no groups have yet been created}
+\end{figure}
+
+
+
+
+
+\end{document}

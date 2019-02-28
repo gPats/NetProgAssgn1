@@ -61,6 +61,12 @@ The parser strictly uses spaces to seperate words. Thus, every word in the user 
 
 \item
 Shell supports any number of commands (each with it's own arguments) in the pipeline like \lstinline{ls|wc|wc} as required in the question. However, nested pipelines with double or triple pipe operators is not allowed.
+
+\item
+Specifically for \lstinline{grep} command. The syntax is \lstinline{grep search_word} and not \lstinline{grep "search_word"}.
+
+\item
+In case of pipelined commands, Input/Output redirection can only be done for the first and last command as appicable. For eg: \lstinline{sort < infile | wc | wc} and \lstinline{ls | wc | wc > outfile} are valid, but \lstinline{ls | wc > abc | wc} is not valid as a command can not have multiple descriptors for \lstinline{stdin} and \lstinline{stdout}.
 \end{enumerate}
 
 
@@ -70,7 +76,7 @@ Shell supports any number of commands (each with it's own arguments) in the pipe
 \lstset{language=C, morekeywords={node}, keywordstyle=\color{blue}, commentstyle=\color{gray}, stringstyle=\color{green}, numbers=left, numberstyle=\small\ttfamily}
 
 \subsection{Linked list of nodes}
-\lstinputlisting[linerange=21-28]{shell.c}
+\lstinputlisting[linerange=25-32]{shell.c}
 This is the definition of the nodes that are passed to \lstinline{exec_command()}. So that they can be executed. The progam reads user input and creates a linked list of such nodes. This linked list is then passed to \lstinline{exec_command()} such that a new process may be created with appropriate file descriptors and the command can be properly executed.
 
 The members of this structure are explained below:
@@ -85,7 +91,7 @@ The members of this structure are explained below:
 
 
 \subsection{Macros to define flag values}
-\lstinputlisting[linerange=13-19]{shell.c}
+\lstinputlisting[linerange=16-23]{shell.c}
 This set of Macros defines a set of values that \lstinline{node.flag} can take. Each bit in \lstinline{node.flag} indicates the presence of one operator as follows:
 \begin{lstlisting}
 SINGLE_BACK 	:'<'
@@ -100,7 +106,7 @@ Multiple bits of \lstinline{node.flag} might be one in some special cases where 
 
 
 \subsection{Size limiting macros}
-\lstinputlisting[linerange=8-10]{shell.c}
+\lstinputlisting[linerange=11-13]{shell.c}
 This set of macros defines the maximum size of some static elements in the program as follows:
 \begin{enumerate}
 	\item \lstinline{MAX_CMD_LENGTH} :Maximum length of the user input string. Actual user string must be at most one less than this to accomodate the last $\backslash$0 character.
@@ -110,7 +116,7 @@ This set of macros defines the maximum size of some static elements in the progr
 
 
 \subsection{Global variables for Shortcut mode} \label{sec:shortcutgvs}
-\lstinputlisting[linerange=30-31]{shell.c}
+\lstinputlisting[linerange=34-35]{shell.c}
 These variables are used to provide shortcut mode functionality.
 \begin{enumerate}
 	\item \lstinline{table:} An array of nodes that would be used as a lookup table when shell is in shortcut mode.
@@ -120,11 +126,11 @@ These variables are used to provide shortcut mode functionality.
 \lstset{language=C, keywordstyle=\color{black}, commentstyle=\color{black}, stringstyle=\color{black}, numbers=none}
 
 
-
+\newpage
 \section{Functional Description}
 The program uses the following functions:
 \lstset{language=C, , morekeywords={node}, keywordstyle=\color{blue}, commentstyle=\color{gray}, stringstyle=\color{green}, numbers=left, numberstyle=\small\ttfamily}
-\lstinputlisting[linerange=34-47]{shell.c}
+\lstinputlisting[linerange=37-52]{shell.c}
 
 This section describes the purpose of each function in the program.
 
@@ -153,16 +159,16 @@ Reads the string recieved from user by \lstinline{scanline()} and separates it i
 \end{description}
 
 \subsection{\lstinline{int check_valid(char * tokens)}}
-This function checks whether the input command exists in PATH variable. It may either accept the full path e.g. /bin/ls or it may accept only the command name e.g. ls provided it is present in any of the folders in PATH variable. If not present returns with error.
+This function checks whether the input command exists in \lstinline{PATH} variable. It may either accept the full path e.g. \lstinline{/bin/ls} or it may accept only the command name e.g. \lstinline{ls} provided it is present in any of the folders in \lstinline{PATH} variable. If not present returns with error.
 \begin{description}
 	\item[Parameters]\hfill
 	\begin{description}
 		\item[tokens] name of command
 	\end{description}
 	\item[Returns]\hfill\\
-		A vector of strings each representing a token in the user input.
+		\lstinline{1} for valid program and \lstinline{-1} for invalid.
 	\item[Note]\hfill\\
-		The resulting vector is allocated dynamically and must be freed at the end of each command using \lstinline{free_cmd()}. See \ref{sec:freecmd}.
+		This is used internally by \lstinline{exec_stmt()} to check for existance of each program in the list. See \ref{sec:execstmt}
 \end{description}
 
 \subsection{\lstinline{node * get_list(char ** tokens)}} \label{sec:getlist}
@@ -243,10 +249,26 @@ This function adds the command in the node pointed to by \lstinline{list} at \ls
 		\end{enumerate}
 \end{description}
 
-\subsection{\lstinline{int exec_stmt(node * cmd_list)}} \label{sec:execcommand}
+\subsection{\lstinline{void exec_stmt(node * cmd_list)}} \label{sec:execstmt}
 Executes every node in the linked list. Handles different cases of single statement, double, triple pipe and pipelined pipes separately. All file descriptors are set up here as required and the respective command is executed using \lstinline{execve}.
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[cmd\_list] The linked list of commands as recieved from \lstinline{getlist}. See \ref{sec:getlist}.
+	\end{description}
+\end{description}
 
+\subsection{\lstinline{void check_flags(node *nd)}}
+TO DO
 
+\subsection{\lstinline{void errExit(char *str)}}
+Prints an appropriate error message and terminates the shell. 
+\begin{description}
+	\item[Parameters]\hfill
+	\begin{description}
+		\item[str] The error message to be printed.
+	\end{description}
+\end{description}
 
 \subsection{\lstinline{void free_cmd(char ** cmd)}} \label{sec:freecmd}
 Frees the memory blocks allocated to the vector of tokens recieved from \lstinline{get_tokens()}. See \ref{sec:gettokens}
@@ -323,5 +345,11 @@ Press ENTER to continue.
 
 $$
 \end{lstlisting}
+
+\item
+Shell does not support commands like \lstinline{cd} and \lstinline{exit} that are not programs but rather shell directives. As such these are not implemted. To exit shell, signla such as \lstinline{SIGQUIT} may be used since \lstinline{SIGINT} would be handled when in shortcut mode.
+
+\item
+Signals generated by the user are recieved by the shell but are not passed on to the currently running process(es). 
 \end{enumerate}
 \end{document}
