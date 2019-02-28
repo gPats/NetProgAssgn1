@@ -156,17 +156,19 @@ int check_valid(char* tokens) {
 		if(access(tokens,F_OK) == 0)return 1;
 	}
 
-	char* search_path = getenv("PATH");
+	char* srch_path = getenv("PATH");
 
-	if(!search_path)return -1;
+	if(!srch_path)return -1;
 		
-	char* buf = (char*)malloc(strlen(tokens) + strlen(search_path) + 3);
+	char* buf = (char*)malloc(strlen(tokens) + strlen(srch_path) + 3);
 		
-	while (*search_path){
+	while (*srch_path){
 		char* iter = buf;
-		for (;*search_path && *search_path != ':'; search_path++,iter++)
+		while (*srch_path && *srch_path != ':')
 		{
-			*iter = *search_path;
+			*iter = *srch_path;
+			srch_path++;
+			iter++;
 		}
 		if(iter == buf)*iter++ = '.';
 		if(iter[-1] != '/')*iter++ = '/';
@@ -175,8 +177,8 @@ int check_valid(char* tokens) {
 			free(buf);
 			return 1;
 		}
-		if(!*search_path)break;
-		search_path++; 
+		if(!*srch_path)break;
+		srch_path++; 
 	}
 	free(buf);
 	return -1;
